@@ -1,0 +1,102 @@
+# tests/test_world.py
+
+"""
+Unit tests for checking initialization, random generation probabilities,
+and state transitions of the World grid.
+"""
+
+import unittest
+from engine.world import World
+from engine.tile import Tile
+from config import TILE_PROBABILITIES
+
+class TestWorld(unittest.TestCase):
+    """
+    Tests spatial layouts, safety coordinate fetches, tick propagation,
+    and statistical probability spreads in the simulated World grid.
+    """
+    
+    def test_dimensions_and_types(self):
+        """Validates world creates a grid with precise requested dimensions containing Tile objects."""
+        width = 15
+        height = 10
+        world = World(width=width, height=height)
+        
+        self.assertEqual(world.width, width)
+        self.assertEqual(world.height, height)
+        self.assertEqual(len(world.grid), height)
+        self.assertEqual(len(world.grid[0]), width)
+        
+        for y in range(height):
+            for x in range(width):
+                tile = world.grid[y][x]
+                self.assertIsInstance(tile, Tile)
+                self.assertEqual(tile.x, x)
+                self.assertEqual(tile.y, y)
+
+    def test_invalid_dimensions(self):
+        """Ensures initiating world grids with 0 or negative coordinates raises ValueErrors."""
+        with self.assertRaises(ValueError):
+            World(width=0, height=10)
+        with self.assertRaises(ValueError):
+            World(width=10, height=-5)
+
+    def test_safe_tile_retrieval(self):
+        """Verifies boundary checking of get_tile for valid and out-of-bounds inputs."""
+        world = World(width=5, height=5)
+        
+        # Valid fetches
+        tile = world.get_tile(2, 2)
+        self.assertIsNotNone(tile)
+        self.assertEqual(tile.x, 2)
+        self.assertEqual(tile.y, 2)
+        
+        # Boundary edges
+        self.assertIsNone(world.get_tile(-1, 2))
+        self.assertIsNone(world.get_tile(5, 2))
+        self.assertIsNone(world.get_tile(2, -1))
+        self.assertIsNone(world.get_tile(2, 5))
+
+    def test_world_tick_propagation(self):
+        """Asserts that running a world-wide tick modifies global resource levels."""
+        world = World(width=5, height=5)
+        
+        initial_stats = world.get_stats()
+        initial_wood = initial_stats["resources"]["wood"]
+        initial_food = initial_stats["resources"]["food"]
+        
+        # Advance simulation one cycle
+        global_changes = world.tick()
+        
+        updated_stats = world.get_stats()
+        updated_wood = updated_stats["resources"]["wood"]
+        updated_food = updated_stats["resources"]["food"]
+        
+        # Compare actual calculations
+        self.assertAlmostEqual(updated_wood, initial_wood + global_changes["wood"])
+        self.assertAlmostEqual(updated_food, initial_food + global_changes["food"])
+
+    def test_generation_probabilities_spread(self):
+        """
+        Generates a large world to statistically verify that terrain distributions
+        conform to configured probabilities within a reasonable variance margin.
+        """
+        # Create a large grid for statistical sample size
+        world = World(width=50, height=50)  # 2500 tiles
+        stats = world.get_stats()
+        total_tiles = stats["total_tiles"]
+        
+        self.assertEqual(total_tiles, 2500)
+        
+        # Check that actual fractions are within a +- 10% margin of target values
+        for tile_type, target_prob in TILE_PROBABILITIES.items():
+            actual_count = stats["tile_counts"].get(tile_type, 0)
+            actual_prob = actual_count / total_tiles
+            
+            # Allow variance due to random distributions
+            margin = 0.10
+            self.assertAlmostEqual(actual_prob, target_prob, delta=margin,
+                                   msg=f"Type '{tile_type}' probability {actual_prob} drifted outside margin of {target_prob}")
+
+if __name__ == "__main__":
+    unittest.main()

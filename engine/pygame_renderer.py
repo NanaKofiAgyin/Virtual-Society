@@ -138,6 +138,16 @@ class PygameRenderer:
                 # Draw subtle grid boundary border
                 pygame.draw.rect(self.screen, PYGAME_COLOR_GRID, rect, 1)
 
+        # Draw dynamic agents overlay
+        for agent in self.world.agents:
+            cx = int(agent.x * PYGAME_CELL_SIZE + PYGAME_CELL_SIZE / 2)
+            cy = int(agent.y * PYGAME_CELL_SIZE + PYGAME_CELL_SIZE / 2)
+            radius = int(PYGAME_CELL_SIZE / 4.5)  # small readable circle
+            
+            # Draw agent circle filled with pure red and a subtle dark red border
+            pygame.draw.circle(self.screen, (231, 76, 60), (cx, cy), radius)
+            pygame.draw.circle(self.screen, (192, 57, 43), (cx, cy), radius, 1)
+
     def _draw_sidebar(self, stats: Dict[str, Any], mouse_pos: tuple) -> None:
         """
         Renders the right panel containing statistics, interactive hover data,
@@ -173,6 +183,8 @@ class PygameRenderer:
         self._draw_text(f"Tick: {self.current_tick}", start_x, y_offset, PYGAME_COLOR_TEXT, self.font_header)
         y_offset += 18
         self._draw_text(f"Tick Delay: {self.tick_delay}s", start_x, y_offset, PYGAME_COLOR_MUTED, self.font_body)
+        y_offset += 16
+        self._draw_text(f"Population: {stats.get('agent_count', 0)} agents", start_x, y_offset, (231, 76, 60), self.font_body)
         
         # 3. Global Resources
         y_offset += 25
@@ -229,12 +241,23 @@ class PygameRenderer:
             food_spec = TILE_SPECS[tile.type]["resources"]["food"]
             max_f = food_spec["max"]
             self._draw_text(f"Food Level : {tile.resources.get('food', 0.0):.1f} / {max_f:.0f}", start_x, y_offset, PYGAME_COLOR_MUTED, self.font_body)
+            
+            # Display any agents located on this tile
+            agents_on_tile = [a for a in self.world.agents if a.x == tile.x and a.y == tile.y]
+            if agents_on_tile:
+                y_offset += 16
+                self._draw_text(f"Agent Present: {len(agents_on_tile)} agent(s)", start_x, y_offset, (231, 76, 60), self.font_body)
+                y_offset += 16
+                self._draw_text(f"Agent Energy : {agents_on_tile[0].energy:.1f}", start_x, y_offset, PYGAME_COLOR_TEXT, self.font_body)
+            else:
+                # Add padding to keep the legend static and prevent shifting
+                y_offset += 32
         else:
             y_offset += 25
             self._draw_text("Hover mouse over grid", start_x, y_offset, PYGAME_COLOR_MUTED, self.font_body)
             y_offset += 16
             self._draw_text("to inspect tile details.", start_x, y_offset, PYGAME_COLOR_MUTED, self.font_body)
-            y_offset += 32  # Keep offset alignment stable
+            y_offset += 64  # Keep offset alignment stable including new agent statistics height
             
         # Divider Line
         y_offset += 25

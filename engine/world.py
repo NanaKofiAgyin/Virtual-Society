@@ -2,8 +2,8 @@
 
 """
 Manages the grid coordinate system, randomly generates the world using
-weighted probabilities, and handles cellular-automata-style ticks including
-Moore neighborhood counts, terrain transitions, and resource dynamics.
+weighted probabilities, and handles cellular-automata-style ticks and
+autonomous agent cycles (births, action decisions, death/starvation cleanup).
 """
 
 import random
@@ -11,18 +11,19 @@ from typing import List, Dict, Optional, Any
 from config import (
     TILE_PROBABILITIES, DEFAULT_WIDTH, DEFAULT_HEIGHT,
     SPREAD_PROB_FOREST, SPREAD_PROB_WATER, SPREAD_PROB_GRASS,
-    THRESHOLD_ISOLATED
+    THRESHOLD_ISOLATED, AGENT_INITIAL_POPULATION
 )
 from engine.tile import Tile
+from engine.agent import Agent
 
 class World:
     """
     Represents the 2D grid world. Handles cell generation, state updates,
-    and aggregate stats for resources and terrain types.
+    autonomous agents, and aggregate stats for resources, terrain, and population.
     """
     def __init__(self, width: int = DEFAULT_WIDTH, height: int = DEFAULT_HEIGHT):
         """
-        Initializes the world grid with the specified dimensions.
+        Initializes the world grid with the specified dimensions and spawns starting agents.
         
         Args:
             width (int): Grid width (number of columns).
@@ -36,9 +37,13 @@ class World:
         
         # Grid layout: self.grid[y][x] represents coordinate (x, y)
         self.grid: List[List[Tile]] = [[None for _ in range(width)] for _ in range(height)]
+        self.agents: List[Agent] = []
         
         # Generate the world terrain
         self.generate()
+        
+        # Spawn initial population
+        self.spawn_initial_agents()
 
     def generate(self) -> None:
         """
@@ -53,6 +58,22 @@ class World:
                 # Perform a weighted random choice to select the tile type
                 chosen_type = random.choices(tile_types, weights=weights, k=1)[0]
                 self.grid[y][x] = Tile(x, y, chosen_type)
+
+    def spawn_initial_agents(self) -> None:
+        """Finds all walkable coordinates and spawns the starting agent population randomly."""
+        walkable_coords = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.grid[y][x].walkable:
+                    walkable_coords.append((x, y))
+                    
+        if not walkable_coords:
+            return
+            
+        # Spawn agents randomly on walkable tiles
+        for _ in range(AGENT_INITIAL_POPULATION):
+            x, y = random.choice(walkable_coords)
+            self.agents.append(Agent(x, y))
 
     def get_neighbors(self, x: int, y: int) -> List[Tile]:
         """
@@ -78,9 +99,10 @@ class World:
 
     def tick(self) -> Dict[str, float]:
         """
-        Ticks every single tile in the world grid using a two-pass cycle.
+        Ticks every single tile and autonomous agent in the world grid.
         Pass 1: Gathers neighbor influences, checks spread conditions, and schedules transitions.
-        Pass 2: Triggers transitions and ticks individual resources under local pressures.
+        Pass 2: Triggers transitions and ticks individual resources.
+        Pass 3: Ticks autonomous agents decision cycles, births, and starvation mortality.
         
         Returns:
             Dict[str, float]: A mapping of resource types to their global changes.
@@ -153,6 +175,21 @@ class World:
                     if res_name in global_changes:
                         global_changes[res_name] += amount
                         
+        # Pass 3: Tick autonomous agents decision/action cycle
+        newborns = []
+        alive_agents = []
+        
+        for agent in self.agents:
+            newborn = agent.decide_and_act(self)
+            if newborn:
+                newborns.append(newborn)
+            if agent.energy > 0.0:
+                alive_agents.append(agent)
+                
+        # Append newborns to the main population
+        alive_agents.extend(newborns)
+        self.agents = alive_agents
+        
         return global_changes
 
     def get_tile(self, x: int, y: int) -> Optional[Tile]:
@@ -174,7 +211,7 @@ class World:
     def get_stats(self) -> Dict[str, Any]:
         """
         Aggregates statistical details of the world state, including
-        terrain distribution counts and current resource sums.
+        terrain distribution counts, resources, and active population.
         
         Returns:
             Dict[str, Any]: A dictionary containing world statistics.
@@ -183,7 +220,8 @@ class World:
             "tile_counts": {k: 0 for k in TILE_PROBABILITIES.keys()},
             "resources": {"wood": 0.0, "food": 0.0},
             "walkable_count": 0,
-            "total_tiles": self.width * self.height
+            "total_tiles": self.width * self.height,
+            "agent_count": len(self.agents)
         }
         
         for y in range(self.height):

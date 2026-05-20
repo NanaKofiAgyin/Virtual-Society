@@ -76,6 +76,8 @@ class TestWorld(unittest.TestCase):
     def test_world_tick_propagation(self):
         """Asserts that running a world-wide tick modifies global resource levels without random transitions."""
         world = World(width=5, height=5)
+        # Clear agents to prevent food consumption from altering resource math
+        world.agents = []
         
         initial_stats = world.get_stats()
         initial_wood = initial_stats["resources"]["wood"]
@@ -136,6 +138,25 @@ class TestWorld(unittest.TestCase):
             margin = 0.10
             self.assertAlmostEqual(actual_prob, target_prob, delta=margin,
                                    msg=f"Type '{tile_type}' probability {actual_prob} drifted outside margin of {target_prob}")
+
+    def test_agent_world_integration(self):
+        """Verifies that the World initializes agents, updates them on ticks, and handles starvation mortality."""
+        # Create world
+        world = World(width=5, height=5)
+        
+        # Verify initial population was spawned
+        from config import AGENT_INITIAL_POPULATION
+        self.assertEqual(len(world.agents), AGENT_INITIAL_POPULATION)
+        
+        # Set all agents to 0.0 energy to test starvation cleanup on next tick
+        for agent in world.agents:
+            agent.energy = 0.0
+            
+        # Tick the world once
+        world.tick()
+        
+        # Verify that all starved agents have been removed
+        self.assertEqual(len(world.agents), 0)
 
 if __name__ == "__main__":
     unittest.main()

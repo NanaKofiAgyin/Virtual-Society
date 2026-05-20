@@ -135,3 +135,16 @@ SPREAD_PROB_GRASS = 0.01    # 1% chance per adjacent grass neighbor to convert m
 THRESHOLD_OVERCROWDED = 6   # halving growth factor if >= 6 similar neighbors
 THRESHOLD_ISOLATED = 1       # natural resource decay penalty if <= 1 similar neighbors
 PENALTY_ISOLATED_DECAY = 0.5 # amount subtracted from wood/food when isolated per tick
+
+# Phase 3: Autonomous Agents Configuration
+AGENT_INITIAL_POPULATION = 12       # Starting count of agents in the world
+AGENT_START_ENERGY = 50.0          # Initial energy level of newborns/starting agents
+AGENT_MAX_ENERGY = 100.0           # Maximum energy capacity
+AGENT_VISION_RADIUS = 2            # Bounding box observation radius
+AGENT_REPRODUCE_THRESHOLD = 80.0   # Minimum energy required to create offspring
+AGENT_METABOLISM = 1.0             # Baseline energy loss per tick
+AGENT_MOVE_COST = 2.0              # Energy cost subtracted when moving
+AGENT_REST_GAIN = 1.0              # Net energy recovered when resting
+AGENT_EAT_AMOUNT = 3.0             # Food units consumed from tile
+AGENT_FOOD_TO_ENERGY_RATIO = 8.0   # Energy gained per 1.0 food unit consumed
+

@@ -125,3 +125,13 @@ PYGAME_COLOR_ACCENT = (241, 196, 15)  # Custom accent color for headings (yellow
 PYGAME_COLOR_MUTED = (149, 165, 166)  # Neutral grey for hover keys/subtitles
 PYGAME_COLOR_HIGHLIGHT = (231, 76, 60) # Coral highlight for impassable/active indicators
 
+# Phase 2: Ecological Dynamics & Environmental Pressures
+# - Spreading Probabilities (per matching neighbor in Moore neighborhood per tick)
+SPREAD_PROB_FOREST = 0.02   # 2% chance per adjacent forest neighbor to convert grass -> forest
+SPREAD_PROB_WATER = 0.005   # 0.5% chance per adjacent water neighbor to convert grass -> water
+SPREAD_PROB_GRASS = 0.01    # 1% chance per adjacent grass neighbor to convert mountain -> grass (erosion)
+
+# - Environmental Pressure limits & rates
+THRESHOLD_OVERCROWDED = 6   # halving growth factor if >= 6 similar neighbors
+THRESHOLD_ISOLATED = 1       # natural resource decay penalty if <= 1 similar neighbors
+PENALTY_ISOLATED_DECAY = 0.5 # amount subtracted from wood/food when isolated per tick

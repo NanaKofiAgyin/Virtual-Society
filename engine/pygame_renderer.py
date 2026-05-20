@@ -96,12 +96,34 @@ class PygameRenderer:
         self.screen.blit(text_surface, (x, y))
 
     def _draw_grid(self) -> None:
-        """Renders the grid world squares colored by their specific terrain types."""
+        """Renders the grid world cells with dynamic brightness reflecting resource richness."""
         for y in range(self.world.height):
             for x in range(self.world.width):
                 tile = self.world.grid[y][x]
                 spec = TILE_SPECS.get(tile.type, {})
-                color = spec.get("pygame_color", (0, 0, 0))
+                base_color = spec.get("pygame_color", (0, 0, 0))
+                
+                # Determine richness ratio [0.0, 1.0] across all its resources
+                resource_specs = spec.get("resources", {})
+                ratios = []
+                for res_name, res_spec in resource_specs.items():
+                    max_limit = res_spec.get("max", 0.0)
+                    if max_limit > 0.0:
+                        current = tile.resources.get(res_name, 0.0)
+                        ratios.append(current / max_limit)
+                
+                # Average ratio across available dynamic resources, defaulting to 1.0 (e.g. for mountain)
+                ratio = sum(ratios) / len(ratios) if ratios else 1.0
+                
+                # Scale color intensity: 40% (depleted) to 100% (rich) brightness
+                intensity_factor = 0.4 + 0.6 * ratio
+                
+                # Interpolate RGB color
+                color = (
+                    int(base_color[0] * intensity_factor),
+                    int(base_color[1] * intensity_factor),
+                    int(base_color[2] * intensity_factor)
+                )
                 
                 rect = pygame.Rect(
                     x * PYGAME_CELL_SIZE,

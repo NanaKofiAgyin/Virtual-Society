@@ -1,0 +1,54 @@
+{
+  "deer": {
+    "diet": "herbivore",
+    "speed": 2,
+    "max_age": 1800,
+    "hunger_rate": 0.10,
+    "fears": ["wolf", "human"],
+    "prey": [],
+    "flies": false,
+    "max_pop": 14,
+    "initial": 10,
+    "breed_cooldown": 72,
+    "breed_chance": 0.12
+  },
+  "rabbit": {
+    "diet": "herbivore",
+    "speed": 1,
+    "max_age": 1200,
+    "hunger_rate": 0.12,
+    "fears": ["wolf", "human"],
+    "prey": [],
+    "flies": false,
+    "max_pop": 20,
+    "initial": 14,
+    "breed_cooldown": 48,
+    "breed_chance": 0.18
+  },
+  "wolf": {
+    "diet": "carnivore",
+    "speed": 3,
+    "max_age": 2200,
+    "hunger_rate": 0.05,
+    "fears": [],
+    "prey": ["rabbit", "deer"],
+    "flies": false,
+    "max_pop": 4,
+    "initial": 3,
+    "breed_cooldown": 96,
+    "breed_chance": 0.15
+  },
+  "bird": {
+    "diet": "herbivore",
+    "speed": 3,
+    "max_age": 1500,
+    "hunger_rate": 0.10,
+    "fears": ["wolf"],
+    "prey": [],
+    "flies": true,
+    "max_pop": 12,
+    "initial": 8,
+    "breed_cooldown": 60,
+    "breed_chance": 0.14
+  }
+}

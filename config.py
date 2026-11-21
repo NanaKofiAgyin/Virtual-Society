@@ -1,150 +1,53 @@
-# config.py
+"""Central configuration loader for Virtual Society (stdlib only).
 
-"""
-Configuration settings for the grid-based world simulation engine.
-This file centralizes environment attributes, probabilities, visual characters,
-and resource behaviors (regeneration/decay) to ensure clean modularity.
+Reads optional `.env` key=value pairs without third-party dependencies and
+exposes typed application settings. No paid API keys are used.
 """
 
-# World Dimensions
-DEFAULT_WIDTH = 20
-DEFAULT_HEIGHT = 20
+from __future__ import annotations
 
-# Weighted generation probabilities (must sum to 1.0)
-TILE_PROBABILITIES = {
-    "grass": 0.50,
-    "forest": 0.20,
-    "water": 0.20,
-    "mountain": 0.10
-}
+import os
+from dataclasses import dataclass
+from pathlib import Path
 
-# ANSI Escape Codes for styling CLI visual output
-ANSI_RESET = "\033[0m"
-ANSI_BOLD = "\033[1m"
-ANSI_FG_GREEN = "\033[32m"
-ANSI_FG_BRIGHT_GREEN = "\033[92m"
-ANSI_FG_BLUE = "\033[34m"
-ANSI_FG_WHITE = "\033[37m"
-ANSI_FG_CYAN = "\033[36m"
-ANSI_FG_YELLOW = "\033[33m"
 
-# Attributes per Tile Type
-# - walkable: Boolean flag indicating if agents/entities can traverse
-# - display_char: Visual representation of the tile in the terminal
-# - color_code: ANSI escape sequence for visual representation
-# - pygame_color: RGB tuple representing the tile in the Pygame visualizer
-# - resources: Dictionary mapping resource type -> {base, max, regen_rate}
-TILE_SPECS = {
-    "grass": {
-        "walkable": True,
-        "display_char": ".",
-        "color_code": ANSI_FG_BRIGHT_GREEN,
-        "pygame_color": (46, 204, 113),  # Emerald Green
-        "resources": {
-            "wood": {
-                "base": 0.0,
-                "max": 0.0,
-                "regen_rate": 0.0
-            },
-            "food": {
-                "base": 2.0,
-                "max": 10.0,
-                "regen_rate": 0.2
-            }
-        }
-    },
-    "forest": {
-        "walkable": True,
-        "display_char": "♣",
-        "color_code": ANSI_FG_GREEN + ANSI_BOLD,
-        "pygame_color": (39, 174, 96),   # Darker Forest Green
-        "resources": {
-            "wood": {
-                "base": 15.0,
-                "max": 100.0,
-                "regen_rate": 1.5
-            },
-            "food": {
-                "base": 5.0,
-                "max": 20.0,
-                "regen_rate": 0.4
-            }
-        }
-    },
-    "water": {
-        "walkable": False,
-        "display_char": "~",
-        "color_code": ANSI_FG_BLUE,
-        "pygame_color": (41, 128, 185),  # River Blue
-        "resources": {
-            "wood": {
-                "base": 0.0,
-                "max": 0.0,
-                "regen_rate": 0.0
-            },
-            "food": {
-                "base": 4.0,
-                "max": 25.0,
-                "regen_rate": 0.8  # Fish reproducing
-            }
-        }
-    },
-    "mountain": {
-        "walkable": False,
-        "display_char": "▲",
-        "color_code": ANSI_FG_WHITE + ANSI_BOLD,
-        "pygame_color": (127, 140, 141), # Steel Grey
-        "resources": {
-            "wood": {
-                "base": 0.0,
-                "max": 0.0,
-                "regen_rate": 0.0
-            },
-            "food": {
-                "base": 0.0,
-                "max": 0.0,
-                "regen_rate": 0.0
-            }
-        }
-    }
-}
+def _load_dotenv_file(path: Path = Path(".env")) -> None:
+    """Load simple KEY=VALUE lines from `.env` into os.environ if not already set."""
+    if not path.is_file():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
-# Simulation default behaviors
-DEFAULT_TICK_DELAY = 0.5  # Seconds between ticks
 
-# Pygame Window & GUI configuration parameters
-PYGAME_CELL_SIZE = 30           # Screen pixels per square cell
-PYGAME_SIDEBAR_WIDTH = 280      # Screen pixels for statistics panel
-PYGAME_FPS = 60                 # Frame rate for user event reactivity
+_load_dotenv_file()
 
-# Pygame GUI Palette (RGB Tuples)
-PYGAME_COLOR_BG = (44, 62, 80)       # Dark slate blue background
-PYGAME_COLOR_GRID = (52, 73, 94)     # Secondary grid divider lines
-PYGAME_COLOR_TEXT = (236, 240, 241)  # Off-white for labels and values
-PYGAME_COLOR_ACCENT = (241, 196, 15)  # Custom accent color for headings (yellow)
-PYGAME_COLOR_MUTED = (149, 165, 166)  # Neutral grey for hover keys/subtitles
-PYGAME_COLOR_HIGHLIGHT = (231, 76, 60) # Coral highlight for impassable/active indicators
 
-# Phase 2: Ecological Dynamics & Environmental Pressures
-# - Spreading Probabilities (per matching neighbor in Moore neighborhood per tick)
-SPREAD_PROB_FOREST = 0.02   # 2% chance per adjacent forest neighbor to convert grass -> forest
-SPREAD_PROB_WATER = 0.005   # 0.5% chance per adjacent water neighbor to convert grass -> water
-SPREAD_PROB_GRASS = 0.01    # 1% chance per adjacent grass neighbor to convert mountain -> grass (erosion)
+@dataclass(frozen=True)
+class Settings:
+    """Application settings loaded from environment variables."""
 
-# - Environmental Pressure limits & rates
-THRESHOLD_OVERCROWDED = 6   # halving growth factor if >= 6 similar neighbors
-THRESHOLD_ISOLATED = 1       # natural resource decay penalty if <= 1 similar neighbors
-PENALTY_ISOLATED_DECAY = 0.5 # amount subtracted from wood/food when isolated per tick
+    # Free local LLM configuration
+    llm_mode: str = os.getenv("LLM_MODE", "mock")
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_model_main: str = os.getenv("OLLAMA_MODEL_MAIN", "llama3.2")
+    ollama_model_cheap: str = os.getenv("OLLAMA_MODEL_CHEAP", "llama3.2:1b")
+    max_calls_per_minute: int = int(os.getenv("MAX_CALLS_PER_MINUTE", "60"))
 
-# Phase 3: Autonomous Agents Configuration
-AGENT_INITIAL_POPULATION = 12       # Starting count of agents in the world
-AGENT_START_ENERGY = 50.0          # Initial energy level of newborns/starting agents
-AGENT_MAX_ENERGY = 100.0           # Maximum energy capacity
-AGENT_VISION_RADIUS = 2            # Bounding box observation radius
-AGENT_REPRODUCE_THRESHOLD = 80.0   # Minimum energy required to create offspring
-AGENT_METABOLISM = 1.0             # Baseline energy loss per tick
-AGENT_MOVE_COST = 2.0              # Energy cost subtracted when moving
-AGENT_REST_GAIN = 1.0              # Net energy recovered when resting
-AGENT_EAT_AMOUNT = 3.0             # Food units consumed from tile
-AGENT_FOOD_TO_ENERGY_RATIO = 8.0   # Energy gained per 1.0 food unit consumed
+    # World & simulation defaults (1 tick = 1 simulated hour)
+    world_width: int = int(os.getenv("WORLD_WIDTH", "50"))
+    world_height: int = int(os.getenv("WORLD_HEIGHT", "50"))
+    world_seed: int = int(os.getenv("WORLD_SEED", "42"))
+    num_humans: int = int(os.getenv("NUM_HUMANS", "10"))
+    tick_interval_seconds: float = float(os.getenv("TICK_INTERVAL_SECONDS", "1.0"))
+    database_path: str = os.getenv("DATABASE_PATH", "virtual_society.db")
 
+    # Server settings
+    server_host: str = os.getenv("SERVER_HOST", "127.0.0.1")
+    server_port: int = int(os.getenv("SERVER_PORT", "8000"))
+
+
+settings = Settings()

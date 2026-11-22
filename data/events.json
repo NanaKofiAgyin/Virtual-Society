@@ -1,0 +1,56 @@
+{
+  "drought": {
+    "chance": 0.006,
+    "duration": 72,
+    "temp_delta": 0.15,
+    "moisture_delta": -0.35,
+    "regrow_multiplier": 0.35,
+    "disease_multiplier": 1.2,
+    "description": "A severe drought dries the land and slows plant growth."
+  },
+  "flood": {
+    "chance": 0.005,
+    "duration": 48,
+    "temp_delta": -0.05,
+    "moisture_delta": 0.40,
+    "regrow_multiplier": 0.70,
+    "disease_multiplier": 1.6,
+    "description": "Heavy floods swell rivers and soak the lowlands."
+  },
+  "fire": {
+    "chance": 0.004,
+    "duration": 24,
+    "temp_delta": 0.20,
+    "moisture_delta": -0.25,
+    "regrow_multiplier": 0.25,
+    "disease_multiplier": 1.0,
+    "description": "Wildfires sweep dry brush and scorch forests."
+  },
+  "ice_age": {
+    "chance": 0.0015,
+    "duration": 168,
+    "temp_delta": -0.35,
+    "moisture_delta": -0.10,
+    "regrow_multiplier": 0.20,
+    "disease_multiplier": 1.3,
+    "description": "A sudden cold snap plunges the world into a mini ice age."
+  },
+  "volcano": {
+    "chance": 0.0015,
+    "duration": 48,
+    "temp_delta": -0.18,
+    "moisture_delta": -0.10,
+    "regrow_multiplier": 0.30,
+    "disease_multiplier": 1.5,
+    "description": "Volcanic ash darkens the skies and cools the climate."
+  },
+  "disease_outbreak": {
+    "chance": 0.003,
+    "duration": 96,
+    "temp_delta": 0.0,
+    "moisture_delta": 0.0,
+    "regrow_multiplier": 1.0,
+    "disease_multiplier": 4.0,
+    "description": "A contagious blight spreads through the population."
+  }
+}

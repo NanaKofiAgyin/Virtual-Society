@@ -1,0 +1,18 @@
+{
+  "fire":         {"era": "paleolithic", "prereqs": [],                            "materials": {"wood": 1.0},               "min_experience": 0.5, "base_chance": 0.08, "effect": "cold_resist"},
+  "stone_tools":  {"era": "paleolithic", "prereqs": [],                            "materials": {},                          "min_experience": 0.5, "base_chance": 0.08, "effect": "gather_speed"},
+  "shelter":      {"era": "paleolithic", "prereqs": ["stone_tools"],               "materials": {"wood": 2.0},               "min_experience": 1.0, "base_chance": 0.07, "effect": "storm_safety"},
+  "spears":       {"era": "paleolithic", "prereqs": ["stone_tools"],               "materials": {"wood": 1.0},               "min_experience": 1.5, "base_chance": 0.07, "effect": "hunt_bonus"},
+  "fishing":      {"era": "paleolithic", "prereqs": ["spears"],                    "materials": {"wood": 1.0},               "min_experience": 1.5, "base_chance": 0.06, "effect": "water_food"},
+  "weaving":      {"era": "neolithic",   "prereqs": ["stone_tools"],               "materials": {"food": 1.0},               "min_experience": 2.0, "base_chance": 0.06, "effect": "clothing_warmth"},
+  "pottery":      {"era": "neolithic",   "prereqs": ["fire"],                      "materials": {"wood": 1.0},               "min_experience": 2.0, "base_chance": 0.06, "effect": "food_storage"},
+  "boats":        {"era": "neolithic",   "prereqs": ["stone_tools", "fishing"],    "materials": {"wood": 3.0},               "min_experience": 2.5, "base_chance": 0.05, "effect": "river_travel"},
+  "farming":      {"era": "neolithic",   "prereqs": ["stone_tools", "pottery"],    "materials": {"food": 2.0},               "min_experience": 2.5, "base_chance": 0.06, "effect": "farm_surplus"},
+  "irrigation":   {"era": "neolithic",   "prereqs": ["farming"],                   "materials": {"wood": 2.0},               "min_experience": 3.0, "base_chance": 0.05, "effect": "drought_resist"},
+  "the_wheel":    {"era": "bronze_age",  "prereqs": ["stone_tools", "shelter"],    "materials": {"wood": 3.0},               "min_experience": 3.5, "base_chance": 0.05, "effect": "trade_range"},
+  "bronze":       {"era": "bronze_age",  "prereqs": ["fire", "pottery"],           "materials": {"wood": 2.0},               "min_experience": 4.0, "base_chance": 0.04, "effect": "metal_tools"},
+  "writing":      {"era": "bronze_age",  "prereqs": ["pottery", "farming"],        "materials": {},                          "min_experience": 4.0, "base_chance": 0.04, "effect": "preserve_knowledge"},
+  "medicine":     {"era": "bronze_age",  "prereqs": ["fire", "farming"],           "materials": {"food": 1.0},               "min_experience": 3.5, "base_chance": 0.05, "effect": "disease_resist"},
+  "sailing":      {"era": "bronze_age",  "prereqs": ["boats", "weaving"],          "materials": {"wood": 4.0},               "min_experience": 4.5, "base_chance": 0.04, "effect": "ocean_travel"},
+  "iron":         {"era": "iron_age",    "prereqs": ["bronze", "the_wheel"],       "materials": {"wood": 3.0},               "min_experience": 5.5, "base_chance": 0.03, "effect": "advanced_tools"}
+}

@@ -1,21 +1,44 @@
-"""Terrain tile definitions and per-tile resource containers."""
+"""Terrain tile view and resource container backed by data-driven biomes."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from world.biomes import BIOMES_BY_NAME, BiomeSpec
+
+if TYPE_CHECKING:
+    from world.map import WorldMap
 
 
 class TerrainType(str, Enum):
-    """Supported terrain types for world tiles."""
+    """All supported biomes and built structures (with legacy aliases)."""
 
-    WATER = "water"
-    GRASS = "grass"
-    FOREST = "forest"
+    DEEP_OCEAN = "deep_ocean"
+    SHALLOW_SEA = "shallow_sea"
+    CORAL_REEF = "coral_reef"
+    RIVER = "river"
+    LAKE = "lake"
+    WETLAND = "wetland"
+    BEACH = "beach"
+    DESERT = "desert"
+    SAVANNA = "savanna"
+    GRASSLAND = "grassland"
+    TEMPERATE_FOREST = "temperate_forest"
+    JUNGLE = "jungle"
+    TAIGA = "taiga"
+    TUNDRA = "tundra"
     MOUNTAIN = "mountain"
+    GLACIER = "glacier"
+    CAVE = "cave"
     FARM = "farm"
     HOUSE = "house"
+
+    # Backwards-compatible aliases
+    WATER = "shallow_sea"
+    GRASS = "grassland"
+    FOREST = "temperate_forest"
 
 
 class ResourceType(str, Enum):
@@ -25,71 +48,13 @@ class ResourceType(str, Enum):
     WOOD = "wood"
 
 
-@dataclass(frozen=True)
-class ResourceSpec:
-    """Initial/maximum amount and base per-tick regrowth rate."""
-
-    maximum: float
-    regen_rate: float
-
-
-@dataclass(frozen=True)
-class TerrainSpec:
-    """Default walkability and resource capacities for a terrain type."""
-
-    walkable: bool
-    resources: dict[ResourceType, ResourceSpec]
-
-
-TERRAIN_SPECS: dict[TerrainType, TerrainSpec] = {
-    TerrainType.WATER: TerrainSpec(
-        walkable=False,
-        resources={
-            ResourceType.FOOD: ResourceSpec(maximum=0.0, regen_rate=0.0),
-            ResourceType.WOOD: ResourceSpec(maximum=0.0, regen_rate=0.0),
-        },
-    ),
-    TerrainType.GRASS: TerrainSpec(
-        walkable=True,
-        resources={
-            ResourceType.FOOD: ResourceSpec(maximum=1.0, regen_rate=0.10),
-            ResourceType.WOOD: ResourceSpec(maximum=0.0, regen_rate=0.0),
-        },
-    ),
-    TerrainType.FOREST: TerrainSpec(
-        walkable=True,
-        resources={
-            ResourceType.FOOD: ResourceSpec(maximum=3.0, regen_rate=0.20),
-            ResourceType.WOOD: ResourceSpec(maximum=5.0, regen_rate=0.25),
-        },
-    ),
-    TerrainType.MOUNTAIN: TerrainSpec(
-        walkable=False,
-        resources={
-            ResourceType.FOOD: ResourceSpec(maximum=0.0, regen_rate=0.0),
-            ResourceType.WOOD: ResourceSpec(maximum=0.0, regen_rate=0.0),
-        },
-    ),
-    TerrainType.FARM: TerrainSpec(
-        walkable=True,
-        resources={
-            ResourceType.FOOD: ResourceSpec(maximum=6.0, regen_rate=0.40),
-            ResourceType.WOOD: ResourceSpec(maximum=0.0, regen_rate=0.0),
-        },
-    ),
-    TerrainType.HOUSE: TerrainSpec(
-        walkable=True,
-        resources={
-            ResourceType.FOOD: ResourceSpec(maximum=0.0, regen_rate=0.0),
-            ResourceType.WOOD: ResourceSpec(maximum=0.0, regen_rate=0.0),
-        },
-    ),
-}
-
-
 @dataclass
 class Tile:
-    """A single cell in the 2D world grid."""
+    """Lightweight tile object exposing terrain, climate layers, and resources.
+
+    When backed by a `WorldMap`, `deplete()` and `regrow()` sync directly to the
+    map's NumPy arrays so 200x200 worlds remain fast and memory-efficient.
+    """
 
     x: int
     y: int
@@ -98,34 +63,47 @@ class Tile:
     resources: dict[ResourceType, float] = field(default_factory=dict)
     max_resources: dict[ResourceType, float] = field(default_factory=dict)
     regen_rates: dict[ResourceType, float] = field(default_factory=dict)
+    elevation: float = 0.5
+    temperature: float = 0.5
+    moisture: float = 0.5
+    ocean_depth: float = 0.0
+    plants: tuple[str, ...] = ()
+    _map: WorldMap | None = field(default=None, repr=False)
+
+    @property
+    def biome(self) -> BiomeSpec:
+        """Return the BiomeSpec for this tile's terrain."""
+        return BIOMES_BY_NAME[self.terrain.value]
 
     @classmethod
-    def from_terrain(cls, x: int, y: int, terrain: TerrainType) -> Tile:
-        """Create a tile initialized with default walkability and resources."""
-        spec = TERRAIN_SPECS[terrain]
+    def from_terrain(cls, x: int, y: int, terrain: TerrainType | str) -> Tile:
+        """Create a standalone tile initialized from `data/biomes.json`."""
+        t = TerrainType(terrain)
+        spec = BIOMES_BY_NAME[t.value]
         return cls(
-            x=x,
-            y=y,
-            terrain=terrain,
-            walkable=spec.walkable,
-            resources={res: rspec.maximum for res, rspec in spec.resources.items()},
-            max_resources={res: rspec.maximum for res, rspec in spec.resources.items()},
-            regen_rates={res: rspec.regen_rate for res, rspec in spec.resources.items()},
+            x=x, y=y, terrain=t, walkable=spec.walkable,
+            resources={ResourceType.FOOD: spec.food_max, ResourceType.WOOD: spec.wood_max},
+            max_resources={ResourceType.FOOD: spec.food_max, ResourceType.WOOD: spec.wood_max},
+            regen_rates={ResourceType.FOOD: spec.food_regen, ResourceType.WOOD: spec.wood_regen},
+            plants=spec.plants,
         )
 
     def get_resource(self, resource: ResourceType | str) -> float:
-        """Return the current amount of a given resource on this tile."""
         res_type = ResourceType(resource)
         return self.resources.get(res_type, 0.0)
 
     def deplete(self, resource: ResourceType | str, amount: float) -> float:
-        """Deplete up to `amount` of a resource and return what was actually taken."""
+        """Deplete up to `amount` of a resource and sync back to the map array if attached."""
         if amount <= 0.0:
             return 0.0
         res_type = ResourceType(resource)
         available = self.resources.get(res_type, 0.0)
         taken = min(available, amount)
-        self.resources[res_type] = available - taken
+        new_val = available - taken
+        self.resources[res_type] = new_val
+        if self._map is not None:
+            arr = self._map.food if res_type is ResourceType.FOOD else self._map.wood
+            arr[self.y, self.x] = new_val
         return taken
 
     def regrow(self, multiplier: float = 1.0) -> None:
@@ -138,14 +116,19 @@ class Tile:
             current = self.resources.get(res_type, 0.0)
             maximum = self.max_resources.get(res_type, 0.0)
             if current < maximum:
-                self.resources[res_type] = min(maximum, current + rate * multiplier)
+                new_val = min(maximum, current + rate * multiplier)
+                self.resources[res_type] = new_val
+                if self._map is not None:
+                    arr = self._map.food if res_type is ResourceType.FOOD else self._map.wood
+                    arr[self.y, self.x] = new_val
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize tile state to a JSON-friendly dictionary."""
         return {
-            "x": self.x,
-            "y": self.y,
-            "terrain": self.terrain.value,
+            "x": self.x, "y": self.y, "terrain": self.terrain.value,
             "walkable": self.walkable,
+            "elevation": round(self.elevation, 2),
+            "temperature": round(self.temperature, 2),
+            "moisture": round(self.moisture, 2),
+            "plants": list(self.plants),
             "resources": {res.value: round(val, 2) for res, val in self.resources.items()},
         }

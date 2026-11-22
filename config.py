@@ -33,15 +33,16 @@ class Settings:
     # Free local LLM configuration
     llm_mode: str = os.getenv("LLM_MODE", "mock")
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    ollama_model_main: str = os.getenv("OLLAMA_MODEL_MAIN", "llama3.2")
+    ollama_model_main: str = os.getenv("OLLAMA_MODEL_MAIN", "llama3.2:3b")
     ollama_model_cheap: str = os.getenv("OLLAMA_MODEL_CHEAP", "llama3.2:1b")
     max_calls_per_minute: int = int(os.getenv("MAX_CALLS_PER_MINUTE", "60"))
 
     # World & simulation defaults (1 tick = 1 simulated hour)
-    world_width: int = int(os.getenv("WORLD_WIDTH", "50"))
-    world_height: int = int(os.getenv("WORLD_HEIGHT", "50"))
+    world_width: int = int(os.getenv("WORLD_WIDTH", "200"))
+    world_height: int = int(os.getenv("WORLD_HEIGHT", "200"))
     world_seed: int = int(os.getenv("WORLD_SEED", "42"))
-    num_humans: int = int(os.getenv("NUM_HUMANS", "10"))
+    founding_humans: int = int(os.getenv("FOUNDING_HUMANS", "12"))
+    max_total_agents: int = int(os.getenv("MAX_TOTAL_AGENTS", "300"))
     tick_interval_seconds: float = float(os.getenv("TICK_INTERVAL_SECONDS", "1.0"))
     database_path: str = os.getenv("DATABASE_PATH", "virtual_society.db")
 

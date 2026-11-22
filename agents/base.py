@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from world.biomes import BodyType
+
 if TYPE_CHECKING:
     from world.map import WorldMap
 
@@ -59,11 +61,7 @@ class Needs:
 
     def to_dict(self) -> dict[str, float]:
         """Serialize needs to a JSON-friendly dictionary."""
-        return {
-            "hunger": round(self.hunger, 2),
-            "energy": round(self.energy, 2),
-            "social": round(self.social, 2),
-        }
+        return {"hunger": round(self.hunger, 2), "energy": round(self.energy, 2), "social": round(self.social, 2)}
 
 
 @dataclass
@@ -87,6 +85,7 @@ class Agent(ABC):
     inventory: dict[str, float] = field(default_factory=dict)
     speed: int = 1
     flies: bool = False
+    body_type: BodyType = BodyType.LAND
     available_actions: list[ActionType] = field(default_factory=lambda: list(ALL_ACTIONS))
     alive: bool = True
     starving: bool = False
@@ -106,21 +105,27 @@ class Agent(ABC):
         """Return the agent's y coordinate."""
         return self.position[1]
 
+    @property
+    def effective_body_type(self) -> BodyType:
+        """Return FLYING when `flies=True`, otherwise `self.body_type`."""
+        return BodyType.FLYING if self.flies else self.body_type
+
     def _valid_neighbors(self, world: WorldMap) -> list[tuple[int, int]]:
         """Return adjacent tiles this agent is allowed to enter."""
         cx, cy = self.position
-        result: list[tuple[int, int]] = []
-        for dx, dy in CARDINALS:
-            tile = world.get_tile(cx + dx, cy + dy)
-            if tile is not None and (self.flies or tile.walkable):
-                result.append((tile.x, tile.y))
-        return result
+        bt = self.effective_body_type
+        return [
+            (cx + dx, cy + dy)
+            for dx, dy in CARDINALS
+            if world.can_enter(cx + dx, cy + dy, bt)
+        ]
 
     def goto(self, world: WorldMap, target: tuple[int, int]) -> bool:
         """Move up to `self.speed` tiles toward `target` using `world.path()`."""
         if not self.alive or self.position == target:
             return False
-        if self.flies:
+        bt = self.effective_body_type
+        if bt is BodyType.FLYING:
             moved = False
             for _ in range(max(1, self.speed)):
                 cx, cy = self.position
@@ -136,7 +141,7 @@ class Agent(ABC):
                 moved = True
             return moved
 
-        route = world.path(self.position, target)
+        route = world.path(self.position, target, body_type=bt)
         if len(route) <= 1:
             return False
         self.position = route[min(max(1, self.speed), len(route) - 1)]
@@ -234,15 +239,10 @@ class Agent(ABC):
     def to_dict(self) -> dict[str, Any]:
         """Serialize agent state to a JSON-friendly dictionary."""
         return {
-            "id": self.id,
-            "name": self.name,
-            "type": self.__class__.__name__,
+            "id": self.id, "name": self.name, "type": self.__class__.__name__,
             "position": list(self.position),
             "inventory": {k: round(v, 2) for k, v in self.inventory.items()},
-            "needs": self.needs.to_dict(),
-            "health": round(self.health, 2),
-            "speed": self.speed,
-            "alive": self.alive,
-            "starving": self.starving,
-            "exhausted": self.exhausted,
+            "needs": self.needs.to_dict(), "health": round(self.health, 2),
+            "speed": self.speed, "body_type": self.effective_body_type.value,
+            "alive": self.alive, "starving": self.starving, "exhausted": self.exhausted,
         }

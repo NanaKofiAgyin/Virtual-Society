@@ -24,7 +24,7 @@ def _flat_grass_world(size: int = 10) -> WorldMap:
     world = WorldMap(width=size, height=size, seed=1)
     for y in range(size):
         for x in range(size):
-            world.tiles[y][x] = Tile.from_terrain(x, y, TerrainType.GRASS)
+            world.set_terrain(x, y, TerrainType.GRASS)
     world.environment.hour = 10  # daytime
     world.environment.weather = Weather.CLEAR
     return world

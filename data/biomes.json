@@ -1,0 +1,21 @@
+{
+  "deep_ocean":       {"id": 0,  "color": "#1e3a5f", "walkable": false, "swimmable": true,  "burrowable": false, "food_max": 1.0, "food_regen": 0.08, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["kelp", "plankton"]},
+  "shallow_sea":      {"id": 1,  "color": "#2b6cb0", "walkable": false, "swimmable": true,  "burrowable": false, "food_max": 2.0, "food_regen": 0.14, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["seagrass", "algae"]},
+  "coral_reef":       {"id": 2,  "color": "#0ea5e9", "walkable": false, "swimmable": true,  "burrowable": false, "food_max": 4.0, "food_regen": 0.25, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["coral", "sea_anemone"]},
+  "river":            {"id": 3,  "color": "#38bdf8", "walkable": false, "swimmable": true,  "burrowable": false, "food_max": 2.5, "food_regen": 0.18, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["reeds", "water_lily"]},
+  "lake":             {"id": 4,  "color": "#0284c7", "walkable": false, "swimmable": true,  "burrowable": false, "food_max": 2.5, "food_regen": 0.16, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["cattail", "duckweed"]},
+  "wetland":          {"id": 5,  "color": "#4d7c5d", "walkable": true,  "swimmable": true,  "burrowable": true,  "food_max": 2.5, "food_regen": 0.18, "wood_max": 2.0, "wood_regen": 0.10, "plants": ["marsh_grass", "willow"]},
+  "beach":            {"id": 6,  "color": "#e9d8a6", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 0.5, "food_regen": 0.05, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["sea_oats"]},
+  "desert":           {"id": 7,  "color": "#d4a373", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 0.4, "food_regen": 0.03, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["cactus", "sagebrush"]},
+  "savanna":          {"id": 8,  "color": "#b5a642", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 1.8, "food_regen": 0.12, "wood_max": 1.5, "wood_regen": 0.08, "plants": ["acacia", "tall_grass"]},
+  "grassland":        {"id": 9,  "color": "#68a357", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 2.0, "food_regen": 0.15, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["wild_wheat", "clover"]},
+  "temperate_forest": {"id": 10, "color": "#2f6f4e", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 3.0, "food_regen": 0.20, "wood_max": 5.0, "wood_regen": 0.25, "plants": ["oak", "berry_bush"]},
+  "jungle":           {"id": 11, "color": "#14532d", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 4.5, "food_regen": 0.30, "wood_max": 6.0, "wood_regen": 0.30, "plants": ["banana", "mahogany", "fern"]},
+  "taiga":            {"id": 12, "color": "#36534b", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 1.5, "food_regen": 0.10, "wood_max": 4.5, "wood_regen": 0.18, "plants": ["spruce", "pine"]},
+  "tundra":           {"id": 13, "color": "#94a3b8", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 0.6, "food_regen": 0.05, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["lichen", "moss"]},
+  "mountain":         {"id": 14, "color": "#64748b", "walkable": false, "swimmable": false, "burrowable": false, "food_max": 0.0, "food_regen": 0.00, "wood_max": 0.0, "wood_regen": 0.00, "plants": []},
+  "glacier":          {"id": 15, "color": "#e2e8f0", "walkable": false, "swimmable": false, "burrowable": false, "food_max": 0.0, "food_regen": 0.00, "wood_max": 0.0, "wood_regen": 0.00, "plants": []},
+  "cave":             {"id": 16, "color": "#334155", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 0.8, "food_regen": 0.06, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["mushroom", "cave_moss"]},
+  "farm":             {"id": 17, "color": "#d69e2e", "walkable": true,  "swimmable": false, "burrowable": true,  "food_max": 6.0, "food_regen": 0.40, "wood_max": 0.0, "wood_regen": 0.00, "plants": ["wheat", "vegetables"]},
+  "house":            {"id": 18, "color": "#b45309", "walkable": true,  "swimmable": false, "burrowable": false, "food_max": 0.0, "food_regen": 0.00, "wood_max": 0.0, "wood_regen": 0.00, "plants": []}
+}

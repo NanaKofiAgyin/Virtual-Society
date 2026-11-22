@@ -101,7 +101,7 @@ def _do_builder_job(human: HumanAgent, world: WorldMap, rng: random.Random) -> s
     tile = world.get_tile(human.x, human.y)
     if tile is not None and tile.terrain == TerrainType.GRASS:
         human.remove_item("wood", SHELTER_WOOD_COST)
-        world.tiles[human.y][human.x] = Tile.from_terrain(human.x, human.y, TerrainType.HOUSE)
+        world.set_terrain(human.x, human.y, TerrainType.HOUSE)
         human.memory.add("Built a new shelter for the village", world.environment.tick, importance=6)
         return "build_shelter"
     grass = [t for t in world.get_nearby(human.x, human.y, radius=4) if t.terrain == TerrainType.GRASS]

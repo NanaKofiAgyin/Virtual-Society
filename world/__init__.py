@@ -1,16 +1,12 @@
-"""World package: terrain tiles, environment cycles, and 2D map management."""
+"""World package: layered NumPy maps, 17 biomes, body-type movement, climate & events."""
 
-from world.environment import Environment, Season, TimeOfDay, Weather
+from world.biomes import BIOMES_BY_ID, BIOMES_BY_NAME, BiomeSpec, BodyType, can_traverse, load_biomes
+from world.environment import Environment, Season, TimeOfDay, Weather, WorldEventSpec, load_events
 from world.map import WorldMap
 from world.tile import ResourceType, TerrainType, Tile
 
 __all__ = [
-    "Environment",
-    "ResourceType",
-    "Season",
-    "TerrainType",
-    "Tile",
-    "TimeOfDay",
-    "Weather",
-    "WorldMap",
+    "BIOMES_BY_ID", "BIOMES_BY_NAME", "BiomeSpec", "BodyType", "Environment",
+    "ResourceType", "Season", "TerrainType", "Tile", "TimeOfDay", "Weather",
+    "WorldEventSpec", "WorldMap", "can_traverse", "load_biomes", "load_events",
 ]

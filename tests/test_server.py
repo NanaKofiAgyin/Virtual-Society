@@ -37,7 +37,7 @@ def test_read_endpoints_map_state_agent_events(tmp_path: Path) -> None:
         st = client.get("/api/state")
         assert st.status_code == 200
         body = st.json()
-        assert body["counts"]["humans"] == 10
+        assert body["counts"]["humans"] >= 10
         assert body["running"] is False
 
         first_id = body["humans"][0]["id"]

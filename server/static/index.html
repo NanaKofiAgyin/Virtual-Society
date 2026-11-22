@@ -11,24 +11,39 @@
     <div class="brand">
       <h1>Virtual Society</h1>
       <span id="brain-badge" class="badge">Brain: Rule-based</span>
+      <span id="era-badge" class="badge">Stone Age</span>
     </div>
     <div id="clock-status" class="status" aria-live="polite">Loading world...</div>
   </header>
 
   <main class="layout">
     <section class="stage" aria-label="World map">
+      <div class="toolbar">
+        <label>Layer:
+          <select id="layer-select">
+            <option value="biomes">Biomes</option>
+            <option value="temperature">Temperature</option>
+            <option value="ocean_depth">Ocean Depth</option>
+            <option value="species_density">Species Density</option>
+          </select>
+        </label>
+        <button id="btn-zoom-in" type="button">Zoom +</button>
+        <button id="btn-zoom-out" type="button">Zoom -</button>
+        <button id="btn-zoom-reset" type="button">Reset View</button>
+      </div>
       <div class="canvas-wrap">
         <canvas id="world-canvas" width="800" height="800"></canvas>
       </div>
       <div id="pop-bar" class="pop-bar"></div>
     </section>
 
-    <aside class="sidebar" aria-label="Controls and inspector">
+    <aside class="sidebar" aria-label="Controls and analytics">
       <section class="card">
         <h2>Controls</h2>
         <div class="btn-row">
           <button id="btn-play" type="button">Play</button>
           <button id="btn-step" type="button">Step</button>
+          <button id="btn-ff" type="button">FF +7d</button>
         </div>
         <label class="slider-row" for="speed-slider">
           <span>Speed: <strong id="speed-val">1.0</strong> t/s</span>
@@ -42,23 +57,59 @@
         <div id="toast" class="toast" aria-live="polite"></div>
       </section>
 
-      <section class="card">
-        <h2>People</h2>
-        <ul id="people-list" class="people-list"></ul>
-      </section>
+      <nav class="tabs" aria-label="Sidebar views">
+        <button type="button" class="tab active" data-tab="people">People</button>
+        <button type="button" class="tab" data-tab="charts">Charts</button>
+        <button type="button" class="tab" data-tab="tree">Tree</button>
+        <button type="button" class="tab" data-tab="timeline">Timeline</button>
+      </nav>
 
-      <section class="card">
-        <h2>Inspector</h2>
-        <div id="inspector" class="inspector">Select a villager to inspect.</div>
-      </section>
+      <div id="tab-people" class="tab-panel active">
+        <section class="card">
+          <h2>People</h2>
+          <ul id="people-list" class="people-list"></ul>
+        </section>
+        <section class="card">
+          <h2>Inspector &amp; Family Tree</h2>
+          <div id="inspector" class="inspector">Select a villager to inspect.</div>
+        </section>
+        <section class="card">
+          <h2>Live Events</h2>
+          <ul id="event-feed" class="event-feed"></ul>
+        </section>
+      </div>
 
-      <section class="card">
-        <h2>Live Events</h2>
-        <ul id="event-feed" class="event-feed"></ul>
-      </section>
+      <div id="tab-charts" class="tab-panel">
+        <section class="card">
+          <h2>Population Over Time</h2>
+          <div id="chart-pop"></div>
+        </section>
+        <section class="card">
+          <h2>Gene Averages Over Time</h2>
+          <div id="chart-genes"></div>
+        </section>
+      </div>
+
+      <div id="tab-tree" class="tab-panel">
+        <section class="card">
+          <h2>Interactive Tree of Life</h2>
+          <div id="phylo-tree" class="inspector"></div>
+          <div id="phylo-detail" class="kv"></div>
+        </section>
+      </div>
+
+      <div id="tab-timeline" class="tab-panel">
+        <section class="card">
+          <h2>Chronicle &amp; Milestones</h2>
+          <div id="stagnation-box"></div>
+          <div id="timeline-box" class="inspector"></div>
+        </section>
+      </div>
     </aside>
   </main>
 
+  <script src="/static/canvas.js"></script>
+  <script src="/static/charts.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

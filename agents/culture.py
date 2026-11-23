@@ -36,6 +36,10 @@ class TechSpec:
     min_experience: float
     base_chance: float
     effect: str
+    min_learners: int = 8
+    practice_generations: int = 20
+    requires_domesticable: bool = False
+    requires_settled: bool = False
 
 
 def load_techs(path: Path | str = DEFAULT_TECH_PATH) -> dict[str, TechSpec]:
@@ -46,7 +50,11 @@ def load_techs(path: Path | str = DEFAULT_TECH_PATH) -> dict[str, TechSpec]:
             name=name, era=str(c["era"]), prereqs=tuple(c.get("prereqs", ())),
             materials={k: float(v) for k, v in c.get("materials", {}).items()},
             min_experience=float(c.get("min_experience", 0.5)),
-            base_chance=float(c.get("base_chance", 0.05)), effect=str(c.get("effect", "")),
+            base_chance=float(c.get("base_chance", 0.002)), effect=str(c.get("effect", "")),
+            min_learners=int(c.get("min_learners", 8)),
+            practice_generations=int(c.get("practice_generations", 20)),
+            requires_domesticable=bool(c.get("requires_domesticable", False)),
+            requires_settled=bool(c.get("requires_settled", False)),
         )
         for name, c in raw.items()
     }
@@ -107,13 +115,11 @@ def cultural_distance(a: CulturalProfile, b: CulturalProfile) -> float:
 
 
 def attempt_discovery(
-    human: HumanAgent,
-    nearby_humans: list[HumanAgent],
-    group_size: int,
-    techs: dict[str, TechSpec],
-    rng: random.Random,
+    human: HumanAgent, nearby_humans: list[HumanAgent], group_size: int,
+    techs: dict[str, TechSpec], rng: random.Random,
+    has_domesticable: bool = True, is_settled: bool = True,
 ) -> str | None:
-    """Attempt an emergent tech discovery based on curiosity, materials, skills, and contact."""
+    """Attempt an emergent tech discovery requiring prereqs, materials, and min learners."""
     if not human.alive:
         return None
     max_exp = max(human.skills.values(), default=0.0)
@@ -124,15 +130,15 @@ def attempt_discovery(
     contact_mult = 1.5 if inter_group else (1.15 if nearby_humans else 0.85)
 
     for tech in techs.values():
-        if tech.name in human.culture.known_techs:
+        if tech.name in human.culture.known_techs or not all(p in human.culture.known_techs for p in tech.prereqs):
             continue
-        if not all(p in human.culture.known_techs for p in tech.prereqs):
+        if group_size < tech.min_learners or max_exp < tech.min_experience:
             continue
-        if max_exp < tech.min_experience:
+        if (tech.requires_domesticable and not has_domesticable) or (tech.requires_settled and not is_settled):
             continue
         if any(human.inventory.get(m, 0.0) < amt for m, amt in tech.materials.items()):
             continue
-        prob = min(0.85, tech.base_chance * learn * curious_mult * pop_mult * contact_mult)
+        prob = min(0.35, tech.base_chance * learn * curious_mult * pop_mult * contact_mult)
         if rng.random() < prob:
             human.culture.known_techs.add(tech.name)
             return tech.name
@@ -188,32 +194,19 @@ def determine_era(known_techs: set[str], techs: dict[str, TechSpec]) -> str:
 
 
 def step_society(
-    humans: list[HumanAgent],
-    techs: dict[str, TechSpec],
-    ever_discovered: set[str],
-    rng: random.Random,
-    tick: int,
+    humans: list[HumanAgent], techs: dict[str, TechSpec], ever_discovered: set[str], rng: random.Random, tick: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run cultural discovery, teaching, settlement leadership/laws, trade/conflict, and loss."""
-    live = [h for h in humans if h.alive]
-    events: list[dict[str, Any]] = []
-
-    # 1) Emergent settlements via simple spatial clustering (radius <= 14)
-    settlements: list[Settlement] = []
-    unassigned = list(live)
+    live, events = [h for h in humans if h.alive], []
+    settlements, unassigned = [], list(live)
     while unassigned:
         seed_h = unassigned.pop(0)
-        cluster = [seed_h]
-        rest = []
+        cluster, rest = [seed_h], []
         for o in unassigned:
-            if abs(o.x - seed_h.x) + abs(o.y - seed_h.y) <= 14:
-                cluster.append(o)
-            else:
-                rest.append(o)
+            (cluster if abs(o.x - seed_h.x) + abs(o.y - seed_h.y) <= 14 else rest).append(o)
         unassigned = rest
         sid = f"settlement_{len(settlements) + 1}"
-        cx = sum(h.x for h in cluster) // len(cluster)
-        cy = sum(h.y for h in cluster) // len(cluster)
+        cx, cy = sum(h.x for h in cluster) // len(cluster), sum(h.y for h in cluster) // len(cluster)
         surplus = sum(max(0.0, h.inventory.get("food", 0.0) - 2.0) for h in cluster)
         leader = max(cluster, key=lambda h: h.genome.get("sociability", 0.5) + h.genome.get("intelligence", 0.5))
         avg_law = sum(h.culture.norms.get("lawfulness", 0.5) for h in cluster) / len(cluster)

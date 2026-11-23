@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from world.map import WorldMap
 
 KEY_GENES = ("size", "speed", "vision", "cold_tolerance", "heat_tolerance", "habitat_preference")
+PHYSICAL_MASS_EXTINCTION_CAUSES = frozenset({"climate_shift", "volcanic_winter", "ocean_anoxia"})
 
 
 @dataclass
@@ -42,9 +43,8 @@ class SpeciesNode:
 def _mean_genome(animals: list[AnimalAgent]) -> dict[str, float]:
     if not animals:
         return {}
-    keys = list(animals[0].genome.keys())
     n = len(animals)
-    return {k: round(sum(a.genome.get(k, 0.5) for a in animals) / n, 4) for k in keys}
+    return {k: round(sum(a.genome.get(k, 0.5) for a in animals) / n, 4) for k in animals[0].genome}
 
 
 def _key_genes(mean_g: dict[str, float]) -> dict[str, float]:
@@ -52,8 +52,7 @@ def _key_genes(mean_g: dict[str, float]) -> dict[str, float]:
 
 
 def _centroid(animals: list[AnimalAgent]) -> tuple[float, float]:
-    n = len(animals)
-    return (sum(a.x for a in animals) / n, sum(a.y for a in animals) / n)
+    return (sum(a.x for a in animals) / len(animals), sum(a.y for a in animals) / len(animals))
 
 
 def _has_barrier_between(
@@ -158,26 +157,25 @@ class SpeciationEngine:
         return {"tick": tick, "kind": "niche_shift", "message": f"{name} shifted niche to {new_bt} ({new_hab})"}
 
     def step_year(
-        self,
-        tick: int,
-        animals: list[AnimalAgent],
-        species_map: dict[str, SpeciesConfig],
-        world: WorldMap,
-        storage: Storage | None = None,
+        self, tick: int, animals: list[AnimalAgent], species_map: dict[str, SpeciesConfig],
+        world: WorldMap, storage: Storage | None = None,
+        physical_cause: str | None = None, density_totals: dict[str, float] | None = None,
     ) -> list[dict[str, Any]]:
-        """Run yearly clustering, speciation, niche shifts, and extinction tracking."""
+        """Run yearly clustering, speciation, niche shifts, and physical-cause extinction tracking."""
         events: list[dict[str, Any]] = []
         by_species: dict[str, list[AnimalAgent]] = {}
         for a in animals:
             if a.alive:
                 by_species.setdefault(a.species, []).append(a)
-
+        dens = density_totals or {}
         live_tracked = [n for n in self.tree.values() if n.extinct_tick is None]
         extinct_now = 0
 
-        # 1) Record extinctions & update peaks/genes
         for node in live_tracked:
             members = by_species.get(node.species_id, [])
+            if not members and dens.get(node.species_id, 0.0) >= 1.0:
+                node.peak_population = max(node.peak_population, int(dens[node.species_id]))
+                continue
             if not members:
                 if node.peak_population > 0 or tick > node.born_tick:
                     node.extinct_tick = tick
@@ -187,19 +185,15 @@ class SpeciationEngine:
                         storage.upsert_species(node)
                 continue
             mean_g = _mean_genome(members)
-            node.peak_population = max(node.peak_population, len(members))
-            node.key_gene_averages = _key_genes(mean_g)
+            node.peak_population, node.key_gene_averages = max(node.peak_population, len(members)), _key_genes(mean_g)
             shift_ev = self._check_niche_shift(node.species_id, members, mean_g, species_map, tick)
             if shift_ev is not None:
                 events.append(shift_ev)
             if storage is not None:
                 storage.upsert_species(node)
 
-        if len(live_tracked) >= 2 and extinct_now >= 2 and (extinct_now / len(live_tracked)) >= self.mass_extinction_fraction:
-            events.append({
-                "tick": tick, "kind": "mass_extinction",
-                "message": f"Mass extinction: {extinct_now}/{len(live_tracked)} species died out",
-            })
+        if physical_cause in PHYSICAL_MASS_EXTINCTION_CAUSES and len(live_tracked) >= 2 and extinct_now >= 2 and (extinct_now / len(live_tracked)) >= self.mass_extinction_fraction:
+            events.append({"tick": tick, "kind": "mass_extinction", "cause": physical_cause, "message": f"Mass extinction ({physical_cause}): {extinct_now}/{len(live_tracked)} species died out"})
 
         # 2) Speciation clustering for each live species with >= 4 individuals
         for sp_name, members in list(by_species.items()):

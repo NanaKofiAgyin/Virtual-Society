@@ -85,16 +85,24 @@ def test_isolated_populations_speciate_and_persist_to_phylo_tree(tmp_path: Path)
 
 
 def test_extinction_and_mass_extinction_recorded(tmp_path: Path) -> None:
-    """Extinctions record extinct_tick in SQLite and trigger mass_extinction when >=40% die."""
+    """Extinctions record extinct_tick in SQLite; mass_extinction requires a physical cause."""
     species = load_species()
     sp_map = {k: species[k] for k in ("deer", "rabbit", "wolf")}
     world = _barrier_world()
     storage = Storage(tmp_path / "extinct.db")
     try:
-        engine = SpeciationEngine(sp_map, tick=0, storage=storage)
-        # Only wolf survives; deer & rabbit go extinct (2/3 = 66% -> mass extinction)
+        # Without a physical cause, extinctions never trigger a random mass_extinction event
+        no_cause_engine = SpeciationEngine(sp_map, tick=0)
         wolves = [AnimalAgent(id="w1", name="W1", position=(5, 5), species="wolf", config=sp_map["wolf"])]
-        evs = engine.step_year(tick=672, animals=wolves, species_map=sp_map, world=world, storage=storage)
+        evs_no_cause = no_cause_engine.step_year(tick=672, animals=wolves, species_map=sp_map, world=world)
+        assert "mass_extinction" not in [e["kind"] for e in evs_no_cause]
+
+        engine = SpeciationEngine(sp_map, tick=0, storage=storage)
+        # Only wolf survives during a volcanic winter (2/3 = 66% -> physical mass extinction)
+        evs = engine.step_year(
+            tick=672, animals=wolves, species_map=sp_map, world=world,
+            storage=storage, physical_cause="volcanic_winter",
+        )
 
         kinds = [e["kind"] for e in evs]
         assert kinds.count("extinction") == 2

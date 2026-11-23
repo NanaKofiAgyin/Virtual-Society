@@ -59,6 +59,7 @@ class WorldMap:
         self.food = np.zeros((height, width), dtype=np.float32)
         self.food_max, self.food_regen = self.food.copy(), self.food.copy()
         self.wood, self.wood_max, self.wood_regen = self.food.copy(), self.food.copy(), self.food.copy()
+        self.river_paths: list[list[list[int]]] = []
         self._classify_all(np_rng)
 
     def _trace_rivers(self, np_rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
@@ -74,11 +75,15 @@ class WorldMap:
         for sy, sx in chosen:
             y, x = int(sy), int(sx)
             visited: set[tuple[int, int]] = set()
+            path: list[list[int]] = []
             for _ in range(self.width + self.height):
                 if self.ocean_depth[y, x] > 0.0 or (y, x) in visited:
+                    if self.ocean_depth[y, x] > 0.0:
+                        path.append([x, y])
                     break
                 visited.add((y, x))
                 rivers[y, x] = True
+                path.append([x, y])
                 best_e = float(self.elevation[y, x])
                 nxt: tuple[int, int] | None = None
                 for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
@@ -91,6 +96,8 @@ class WorldMap:
                     lakes[y, x] = True
                     break
                 y, x = nxt
+            if len(path) >= 2:
+                self.river_paths.append(path)
         return rivers, lakes
 
     def _classify_all(self, np_rng: np.random.Generator) -> None:
@@ -150,15 +157,11 @@ class WorldMap:
     def get_nearby(self, x: int, y: int, radius: int, include_self: bool = False) -> list[Tile]:
         if radius < 0:
             raise ValueError("radius must be non-negative")
-        tiles: list[Tile] = []
-        for ty in range(max(0, y - radius), min(self.height, y + radius + 1)):
-            for tx in range(max(0, x - radius), min(self.width, x + radius + 1)):
-                if not include_self and tx == x and ty == y:
-                    continue
-                tile = self.get_tile(tx, ty)
-                if tile is not None:
-                    tiles.append(tile)
-        return tiles
+        return [
+            t for ty in range(max(0, y - radius), min(self.height, y + radius + 1))
+            for tx in range(max(0, x - radius), min(self.width, x + radius + 1))
+            if (include_self or tx != x or ty != y) and (t := self.get_tile(tx, ty)) is not None
+        ]
 
     def positions_for_body(self, body_type: BodyType = BodyType.LAND) -> list[tuple[int, int]]:
         """Return all `(x, y)` positions traversable by `body_type`."""
@@ -239,9 +242,9 @@ class WorldMap:
             self.regrow()
 
     def to_compact_dict(self) -> dict[str, Any]:
-        """Compact viewer payload: palette + flat row-major biome IDs (fast for 200x200)."""
+        """Compact viewer payload: palette, flat biome IDs, and downstream river paths."""
         return {
-            "width": self.width, "height": self.height,
+            "width": self.width, "height": self.height, "rivers": self.river_paths,
             "palette": {str(bid): {"name": s.name, "color": s.color} for bid, s in BIOMES_BY_ID.items()},
             "biomes": self.biome_id.ravel().tolist(),
         }

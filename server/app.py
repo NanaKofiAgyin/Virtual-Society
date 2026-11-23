@@ -19,6 +19,7 @@ from simulation.lod import TimeScale
 from simulation.storage import Storage
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 
 
 class ControlRequest(BaseModel):
@@ -62,6 +63,7 @@ class SimulationRunner:
         map_data = w.to_compact_dict()
         layers_data = {
             "width": w.width, "height": w.height,
+            "elevation": np.clip(w.elevation * 255, 0, 255).astype(np.uint8).ravel().tolist(),
             "temperature": np.clip(w.temperature * 255, 0, 255).astype(np.uint8).ravel().tolist(),
             "ocean_depth": np.clip(w.ocean_depth * 255, 0, 255).astype(np.uint8).ravel().tolist(),
         }
@@ -69,15 +71,17 @@ class SimulationRunner:
         animals = [a.to_dict() for a in self.sim.animals]
         agents = {h["id"]: h for h in humans}
         agents.update({a["id"]: a for a in animals})
+        names_by_id = {h.id: h.name for h in self.sim.humans}
+        minds = {h.id: self.sim.dialogue.ensure_mind(h, w).to_dict(names_by_id) for h in self.sim.humans if h.alive}
         events = list(self.sim.events)[-50:]
         state_data = {
             "seed": self.sim.seed, "running": self.running, "speed": self.speed,
             "environment": self.sim.environment.to_dict(),
-            "humans": humans, "animals": animals,
-            "counts": self.sim.population_counts(),
-            "society": self.sim.stats.society,
-            "llm_mode": self.sim.llm_client.mode,
-            "llm_usage": self.sim.llm_client.usage.summary(),
+            "humans": humans, "animals": animals, "counts": self.sim.population_counts(),
+            "society": self.sim.stats.society, "minds": minds, "tech_tree": self.sim.progress.to_tech_tree_dict(),
+            "conversations": [c.to_dict() for c in list(self.sim.dialogue.logs)[-50:]],
+            "glossaries": self.sim.dialogue.build_glossaries(self.sim.humans),
+            "llm_mode": self.sim.llm_client.mode, "llm_usage": self.sim.llm_client.usage.summary(),
         }
         history_data = {
             **self.sim.history.to_dict(self.sim.environment.year),
@@ -204,6 +208,8 @@ def create_app(
     api.state.runner = runner
     if STATIC_DIR.is_dir():
         api.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    if ASSETS_DIR.is_dir():
+        api.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
     api.add_api_route("/health", lambda: {"status": "ok"}, methods=["GET"])
     api.add_api_route("/", lambda: FileResponse(STATIC_DIR / "index.html"), methods=["GET"])
@@ -223,12 +229,10 @@ def create_app(
         return agent
 
     @api.post("/api/control")
-    def api_control(body: ControlRequest) -> dict[str, Any]:
-        return runner.set_control(running=body.running, speed=body.speed)
+    def api_control(body: ControlRequest) -> dict[str, Any]: return runner.set_control(running=body.running, speed=body.speed)
 
     @api.post("/api/fast_forward")
-    def api_fast_forward(body: FastForwardRequest | None = None) -> dict[str, Any]:
-        return runner.fast_forward(days=body.days if body else 7)
+    def api_fast_forward(body: FastForwardRequest | None = None) -> dict[str, Any]: return runner.fast_forward(days=body.days if body else 7)
 
     @api.post("/api/load")
     def api_load() -> dict[str, Any]:
@@ -238,8 +242,7 @@ def create_app(
         return restored
 
     @api.post("/api/reset")
-    def api_reset(body: ResetRequest | None = None) -> dict[str, Any]:
-        return runner.reset(seed=body.seed if body else None)
+    def api_reset(body: ResetRequest | None = None) -> dict[str, Any]: return runner.reset(seed=body.seed if body else None)
 
     return api
 

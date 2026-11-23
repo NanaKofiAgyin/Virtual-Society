@@ -105,7 +105,8 @@ def test_place_village_find_nearest_and_vectorized_regrow() -> None:
 def test_seasons_climate_shifts_tides_and_data_events() -> None:
     """Seasons shift temperature/rainfall, tides oscillate, and events load from data/events.json."""
     events = load_events()
-    assert {"drought", "flood", "fire", "ice_age", "volcano", "disease_outbreak"}.issubset(events.keys())
+    assert {"drought", "flood", "fire", "volcano", "disease_outbreak"}.issubset(events.keys())
+    assert "ice_age" not in events
 
     env = Environment(seed=11)
     assert env.season is Season.SPRING and env.time_of_day is TimeOfDay.DAWN

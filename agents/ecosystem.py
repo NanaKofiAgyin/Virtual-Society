@@ -43,6 +43,16 @@ class SpeciesConfig:
     breed_cooldown: int
     breed_chance: float
     genome_ranges: dict[str, tuple[float, float]]
+    simulation_tier: str = "individual"
+    density_k: float = 0.0
+    growth_rate: float = 0.0
+    home_range: int = 8
+    social: bool = False
+    specialist: bool = False
+
+    @property
+    def is_density_tier(self) -> bool:
+        return self.simulation_tier == "density"
 
     @property
     def genome_template(self) -> dict[str, float]:
@@ -69,6 +79,12 @@ def load_species(path: Path | str = DEFAULT_SPECIES_PATH) -> dict[str, SpeciesCo
             founding_min=int(c.get("founding_min", 0)), founding_max=int(c.get("founding_max", 0)),
             breed_cooldown=int(c.get("breed_cooldown", 96)), breed_chance=float(c.get("breed_chance", 0.2)),
             genome_ranges=ranges,
+            simulation_tier=str(c.get("simulation_tier", "individual")),
+            density_k=float(c.get("density_k", 0.0)),
+            growth_rate=float(c.get("growth_rate", 0.0)),
+            home_range=int(c.get("home_range", 8)),
+            social=bool(c.get("social", False)),
+            specialist=bool(c.get("specialist", False)),
         )
     return out
 
@@ -103,8 +119,30 @@ def predator_prey_capture_prob(predator: AnimalAgent, prey: AnimalAgent) -> floa
     return max(0.05, min(0.75, round(prob, 4)))
 
 
-def pollination_multiplier(animals: list[AnimalAgent], baseline_pollinators: int = 8) -> float:
-    """Compute plant regrowth multiplier based on active pollinator population.
+def inbreeding_depression_factor(pop_size: int, genetic_diversity: float) -> float:
+    """Return survival/fertility multiplier [0.35, 1.0]; drops when pop & diversity are low."""
+    if pop_size >= 30 or genetic_diversity >= 0.10:
+        return 1.0
+    pop_deficit = max(0.0, (30.0 - pop_size) / 30.0)
+    div_deficit = max(0.0, (0.10 - genetic_diversity) / 0.10)
+    penalty = 0.65 * pop_deficit * (0.35 + 0.65 * div_deficit)
+    return round(max(0.35, 1.0 - penalty), 4)
+
+
+def allee_effect_factor(local_count: int, social: bool, threshold: int = 8) -> float:
+    """Return reproductive/foraging multiplier [0.25, 1.0] for social species below pack/herd size."""
+    if not social or local_count >= threshold:
+        return 1.0
+    if local_count <= 1:
+        return 0.25
+    ratio = local_count / float(max(1, threshold))
+    return round(0.25 + 0.75 * ratio, 4)
+
+
+def pollination_multiplier(
+    animals: list[AnimalAgent], baseline_pollinators: int = 8, density_grid: Any = None,
+) -> float:
+    """Compute plant regrowth multiplier based on active individual + density-tier pollinators.
 
     With zero pollinators, only wind-pollinated regrowth (0.25x) remains; healthy
     pollinator populations boost plant reproduction up to 1.35x.
@@ -113,6 +151,8 @@ def pollination_multiplier(animals: list[AnimalAgent], baseline_pollinators: int
         1 for a in animals
         if a.alive and a.config is not None and a.config.trophic_level == "pollinator"
     )
+    if density_grid is not None:
+        n_poll += int(density_grid.pollinator_index() * baseline_pollinators)
     if n_poll <= 0:
         return 0.25
     ratio = min(1.5, n_poll / max(1, baseline_pollinators))

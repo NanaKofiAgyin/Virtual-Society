@@ -12,20 +12,20 @@ from agents.culture import load_techs, step_society
 from agents.ecosystem import Carcass, decompose_carcasses, pollination_multiplier
 from agents.genome import random_genome
 from agents.human import HumanAgent, Persona
-from agents.lifecycle import (
-    TICKS_PER_YEAR, DeathCause, FamilyTree, LifeStage,
-    can_pair_humans, child_learn_from_adults, spawn_human_child,
-)
+from agents.lifecycle import TICKS_PER_YEAR, DeathCause, FamilyTree, LifeStage, can_pair_humans, child_learn_from_adults, spawn_human_child
 from config import settings
 from llm.client import LLMClient
+from simulation.dialogue import DialogueManager
+from simulation.disease import DiseaseEngine
+from simulation.progress import ProgressTracker
 from simulation.evolution import SpeciationEngine
 from simulation.history import HistoryTracker
 from simulation.lod import TIME_SCALE_HOURS, LODManager, TimeScale
 from simulation.stats import SimulationStats
 from simulation.storage import Storage
+from world.density import DensityGrid
 from world.environment import Environment
 from world.map import WorldMap
-from world.tile import TerrainType
 
 FOUNDER_GIVEN = ("Ada", "Bram", "Clara", "Dorian", "Elena", "Finn", "Grace", "Hugo", "Iris", "Jonah",
                  "Kira", "Liam", "Mira", "Nolan", "Orla", "Piers", "Quinn", "Rosa", "Silas", "Talia")
@@ -47,16 +47,21 @@ class Simulation:
         n_founders = founding_humans if founding_humans is not None else settings.founding_humans
         self.world = WorldMap(width=width, height=height, seed=seed)
         self.world.place_village(n_houses=max(10, n_founders), n_farms=max(10, n_founders))
-        self.llm_client = llm_client if llm_client is not None else LLMClient(mode="mock")
+        self.llm_client = llm_client if llm_client is not None else LLMClient(mode=settings.llm_mode)
         self.storage, self.events, self.stats = storage, deque(maxlen=200), SimulationStats()
         self.species, self.techs, self.ever_discovered_techs = load_species(), load_techs(), set()
-        self.humans: list[HumanAgent] = self._spawn_founders(n_founders)
-        self.animals: list[AnimalAgent] = spawn_animals(self.world, self.species, self.rng)
-        self.carcasses, self.history = [], HistoryTracker()
-        self.evolution = SpeciationEngine(self.species, tick=0, storage=self.storage)
-        self.lod = LODManager(cell_size=8)
+        self.density, self.disease, self.dialogue = DensityGrid(self.world, self.species, self.rng), DiseaseEngine(self.rng), DialogueManager(self.rng)
+        self.progress = ProgressTracker(self.techs, self.rng)
+        self.humans, self.carcasses, self.history = self._spawn_founders(n_founders), [], HistoryTracker()
+        if self.humans:
+            t0 = self.world.get_tile(self.humans[0].x, self.humans[0].y)
+            self.progress.add_group(self.humans[0].x, self.humans[0].y, t0.terrain.value if t0 else "grassland", pop=len(self.humans))
+        self.animals: list[AnimalAgent] = spawn_animals(self.world, self.species, self.rng, scale=min(1.0, max(0.06, (width * height) / 12000.0)))
+        self.evolution, self.lod = SpeciationEngine(self.species, tick=0, storage=self.storage), LODManager(cell_size=8)
         self.lod.seed_tier3_groups(self.world, self.species, self.rng)
-        self._next_human_id, self._next_animal_id, self._last_year = len(self.humans), len(self.animals), self.environment.year
+        self._next_human_id, self._next_animal_id = len(self.humans), len(self.animals)
+        self._last_year, self._last_season = self.environment.year, self.environment.season
+        self.history.record_season_metrics(self._last_year, self._last_season.value, self.humans, self.animals)
 
     @property
     def environment(self) -> Environment:
@@ -65,7 +70,6 @@ class Simulation:
     def _spawn_founders(self, count: int) -> list[HumanAgent]:
         import numpy as np
         from world.biomes import BIOMES_BY_NAME, BodyType
-
         houses = [(int(x), int(y)) for y, x in np.argwhere(self.world.biome_id == BIOMES_BY_NAME["house"].id)]
         homes = houses if len(houses) >= count else self.world.positions_for_body(BodyType.LAND)
         humans: list[HumanAgent] = []
@@ -77,34 +81,32 @@ class Simulation:
                 id=hid, name=full_name, position=home_pos, home=home_pos,
                 persona=Persona(full_name, age_years, job, ("resilient", "curious"), "Help the village thrive"),
                 needs=Needs(hunger=8.5, energy=8.5, social=8.0), inventory={"food": 4.0},
-                genome=random_genome({"intelligence": 0.7, "sociability": 0.7}, rng=self.rng),
-                family=FamilyTree(surname=surname, lineage_id=hid),
-                skills={job: 3.0}, age_ticks=age_years * TICKS_PER_YEAR,
+                genome=random_genome({"intelligence": 0.7, "sociability": 0.7, "skin_tone": 0.5, "hair_tone": 0.4}, rng=self.rng),
+                family=FamilyTree(surname=surname, lineage_id=hid), skills={job: 3.0}, age_ticks=age_years * TICKS_PER_YEAR,
+                sex="M" if idx % 2 == 0 else "F",
             ))
         return humans
 
     def _gen_human_id(self) -> str:
-        self._next_human_id += 1
-        return f"h_{self._next_human_id}"
-
+        self._next_human_id += 1; return f"h_{self._next_human_id}"
     def _gen_animal_id(self) -> str:
-        self._next_animal_id += 1
-        return f"a_{self._next_animal_id}"
+        self._next_animal_id += 1; return f"a_{self._next_animal_id}"
 
     def log_event(self, kind: str, message: str) -> None:
-        tick = self.environment.tick
-        self.events.append({"tick": tick, "kind": kind, "message": message})
+        self.events.append({"tick": self.environment.tick, "kind": kind, "message": message})
         if self.storage is not None:
-            self.storage.log_event(tick, kind, message)
+            self.storage.log_event(self.environment.tick, kind, message)
 
     def converse(self, a: HumanAgent, b: HumanAgent) -> tuple[str, str]:
-        la, lb = a.speak(b, self.world, self.llm_client, self.rng), b.speak(a, self.world, self.llm_client, self.rng)
-        self.log_event("dialogue", f"{a.name} -> {b.name}: {la}")
-        self.log_event("dialogue", f"{b.name} -> {a.name}: {lb}")
+        rec = self.dialogue.run_conversation(a, b, self.world, self.llm_client, all_humans=self.humans)
+        la, lb = rec.turns[0].line, rec.turns[1].line
+        self.log_event("dialogue", f"[{rec.purpose}] {a.name} & {b.name}: {rec.consequences[0]}")
         return la, lb
 
     def population_counts(self) -> dict[str, int]:
-        counts: dict[str, int] = {"humans": sum(1 for h in self.humans if h.alive), **{k: 0 for k in self.species}}
+        counts: dict[str, int] = {"humans": sum(1 for h in self.humans if h.alive), **{k: int(v) for k, v in self.density.all_totals().items()}}
+        for k in self.species:
+            counts.setdefault(k, 0)
         for a in self.animals:
             if a.alive:
                 counts[a.species] = counts.get(a.species, 0) + 1
@@ -144,12 +146,18 @@ class Simulation:
         self.humans.extend(newborns)
 
     def _step_year_rollover(self, ev_name: str | None) -> None:
+        if self.environment.season != self._last_season:
+            self._last_season = self.environment.season
+            self.history.record_season_metrics(self.environment.year, self._last_season.value, self.humans, self.animals)
         if self.environment.year <= self._last_year:
             return
         self.stats.record_year(self._last_year, self.humans, self.animals)
-        for ev in self.evolution.step_year(self.environment.tick, self.animals, self.species, self.world, self.storage):
-            self.log_event(ev["kind"], ev["message"])
-            self.history.observe_event(ev, self._last_year, self.stats.society["era"])
+        self.dialogue.drift_isolated_languages(self.humans)
+        if self.environment.year % 25 == 0:
+            self.progress.step_generation(self.environment.year, world=self.world)
+        cause = "volcanic_winter" if ev_name == "volcano" else None
+        for ev in self.evolution.step_year(self.environment.tick, self.animals, self.species, self.world, self.storage, physical_cause=cause, density_totals=self.density.all_totals()):
+            self.log_event(ev["kind"], ev["message"]); self.history.observe_event(ev, self._last_year, self.stats.society["era"])
         warn = self.history.record_year_metrics(self._last_year, self.humans, self.animals, self.stats.society, ev_name)
         if warn:
             self.log_event("stagnation", f"Stagnation ({warn['quiet_years']}y): {warn['cause']}")
@@ -159,7 +167,8 @@ class Simulation:
         """Advance simulation according to `self.lod.time_scale` (normal/fast/geological)."""
         hours = TIME_SCALE_HOURS[self.lod.time_scale]
         self.environment.advance_time(hours)
-        self.world.regrow(self.environment.regrow_multiplier() * pollination_multiplier(self.animals) * hours)
+        self.density.step(dt_days=hours / 24.0, env_mult=self.environment.regrow_multiplier())
+        self.world.regrow(self.environment.regrow_multiplier() * pollination_multiplier(self.animals, density_grid=self.density) * hours)
         self.lod.step_tier3(self.world, hours, self.rng)
         ev_name = self.environment.active_event.name if self.environment.active_event else None
         self.history.observe_environment(ev_name, self.environment.tick, self.environment.year, self.stats.society["era"])
@@ -182,12 +191,16 @@ class Simulation:
 
         self._step_human_reproduction_and_learning()
         if self.environment.tick % 6 == 0 or hours >= 24:
+            live_h = [h for h in self.humans if h.alive]
+            if len(live_h) >= 2:
+                a = self.rng.choice(live_h)
+                nbrs = [b for b in live_h if b is not a and abs(b.x - a.x) + abs(b.y - a.y) <= 4]
+                if nbrs:
+                    self.converse(a, self.rng.choice(nbrs))
             soc, soc_events = step_society(self.humans, self.techs, self.ever_discovered_techs, self.rng, self.environment.tick)
-            self.stats.update_society(soc)
-            self.lod.refresh_notables(self.humans, soc["settlements"])
+            self.stats.update_society(soc); self.lod.refresh_notables(self.humans, soc["settlements"])
             for ev in soc_events:
-                self.log_event(ev["kind"], ev["message"])
-                self.history.observe_event(ev, self.environment.year, soc["era"])
+                self.log_event(ev["kind"], ev["message"]); self.history.observe_event(ev, self.environment.year, soc["era"])
 
         live_total = self._total_live_agents()
         alive_before = {a.id for a in self.animals if a.alive}
@@ -195,20 +208,17 @@ class Simulation:
         for a in self.animals:
             if not a.alive:
                 continue
-            child = a.step(
-                self.world, self.lod.spatial.query_radius(a.x, a.y, 10), self.rng,
-                can_reproduce=(live_total + len(newborns) < self.max_total_agents),
-                next_id_fn=self._gen_animal_id, carcasses=self.carcasses,
-            )
+            child = a.step(self.world, self.lod.spatial.query_radius(a.x, a.y, 10), self.rng, can_reproduce=(live_total + len(newborns) < self.max_total_agents), next_id_fn=self._gen_animal_id, carcasses=self.carcasses)
             if child is not None:
-                newborns.append(child)
-                self.stats.record_birth(a.species)
+                newborns.append(child); self.stats.record_birth(a.species)
 
+        if self.environment.tick % 12 == 0:
+            self.disease.step_agents(self.animals)
         for a in self.animals:
             if not a.alive and a.id in alive_before:
                 self.stats.record_death(a.species, a.death_cause or DeathCause.STARVATION)
                 self.carcasses.append(Carcass(a.x, a.y, a.species, a.config.energy_value if a.config else 25.0))
-        has_decomp = any(a.alive and a.config and a.config.trophic_level == "decomposer" for a in self.animals)
+        has_decomp = self.density.has_decomposers() or any(a.alive and a.config and a.config.trophic_level == "decomposer" for a in self.animals)
         self.carcasses = decompose_carcasses(self.carcasses, self.world, has_decomposers=has_decomp)
         self.animals = [a for a in self.animals if a.alive] + newborns
         self._step_year_rollover(ev_name)
@@ -224,25 +234,17 @@ class Simulation:
 
     def state(self) -> dict[str, Any]:
         return {
-            "seed": self.seed, "environment": self.environment.to_dict(),
-            "world": self.world.to_compact_dict(), "humans": [h.detail() for h in self.humans],
-            "animals": [a.to_dict() for a in self.animals], "counts": self.population_counts(),
-            "stats": self.stats.summary(), "events": list(self.events)[-30:],
-            "llm_usage": self.llm_client.usage.summary(),
+            "seed": self.seed, "environment": self.environment.to_dict(), "world": self.world.to_compact_dict(),
+            "humans": [h.detail() for h in self.humans], "animals": [a.to_dict() for a in self.animals],
+            "counts": self.population_counts(), "stats": self.stats.summary(),
+            "events": list(self.events)[-30:], "llm_usage": self.llm_client.usage.summary(),
         }
 
     def summary(self) -> str:
         env, pop = self.environment, self.population_counts()
         animals = ", ".join(f"{k}: {pop[k]}" for k in self.species if pop.get(k, 0) > 0)
-        return (
-            f"Virtual Society (seed={self.seed}) Y{env.year} {env.season.value} D{env.day} "
-            f"{env.hour:02d}:00 ({env.tick} ticks) | Weather: {env.weather.value}\n"
-            f"Humans: {pop['humans']} | Animals: {animals}\n"
-            f"Births: {self.stats.births_total} | Deaths: {dict(self.stats.deaths_by_cause)}"
-        )
+        return (f"Virtual Society (seed={self.seed}) Y{env.year} {env.season.value} D{env.day} {env.hour:02d}:00 ({env.tick} ticks) | Weather: {env.weather.value}\n"
+                f"Humans: {pop['humans']} | Animals: {animals}\nBirths: {self.stats.births_total} | Deaths: {dict(self.stats.deaths_by_cause)}")
 
-    def __getstate__(self) -> dict[str, Any]:
-        return {**self.__dict__, "storage": None}
-
-    def __setstate__(self, state: dict[str, Any]) -> None:
-        self.__dict__.update(state)
+    def __getstate__(self) -> dict[str, Any]: return {**self.__dict__, "storage": None}
+    def __setstate__(self, state: dict[str, Any]) -> None: self.__dict__.update(state)

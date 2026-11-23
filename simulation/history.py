@@ -109,11 +109,37 @@ class HistoryTracker:
             self.record_milestone("ice_age", "Ice Age", "A sudden freeze gripped the world.", tick, year, era,
                                   unique_key=f"ice_age_y{year}")
 
+    def record_season_metrics(
+        self, year: int, season: str, humans: list[HumanAgent], animals: list[AnimalAgent],
+    ) -> None:
+        """Sample population and gene-average chart series every simulated season."""
+        live_h = [h for h in humans if h.alive]
+        live_a = [a for a in animals if a.alive]
+        by_sp: dict[str, list[dict[str, float]]] = {}
+        if live_h:
+            by_sp["human"] = [h.genome for h in live_h]
+        for a in live_a:
+            by_sp.setdefault(a.species, []).append(a.genome)
+
+        label = f"Y{year} {season[:3]}"
+        counts = {sp: len(gs) for sp, gs in by_sp.items()}
+        self.population_series.append({"year": year, "label": label, "counts": counts})
+        self.species_count_series.append({"year": year, "label": label, "species_count": len(by_sp)})
+        self.gene_diversity_latest = {sp: _genetic_diversity(gs) for sp, gs in by_sp.items()}
+
+        all_g = [g for gs in by_sp.values() for g in gs]
+        h_intel = round(sum(g.get("intelligence", 0.5) for g in by_sp.get("human", ())) / max(1, len(live_h)), 4) if live_h else 0.0
+        all_intel = round(sum(g.get("intelligence", 0.5) for g in all_g) / max(1, len(all_g)), 4) if all_g else 0.0
+        self.avg_intelligence_series.append({"year": year, "label": label, "human": h_intel, "overall": all_intel})
+        avg_cold = round(sum(g.get("cold_tolerance", 0.5) for g in all_g) / max(1, len(all_g)), 4) if all_g else 0.0
+        avg_spd = round(sum(g.get("speed", 0.5) for g in all_g) / max(1, len(all_g)), 4) if all_g else 0.0
+        self.gene_averages_series.append({"year": year, "label": label, "intelligence": all_intel, "cold_tolerance": avg_cold, "speed": avg_spd})
+
     def record_year_metrics(
         self, year: int, humans: list[HumanAgent], animals: list[AnimalAgent],
         society: dict[str, Any], active_event: str | None = None,
     ) -> dict[str, Any] | None:
-        """Compute yearly novelty metrics and run the stagnation detector."""
+        """Record yearly milestones, refresh metrics if needed, and run stagnation check."""
         live_h = [h for h in humans if h.alive]
         live_a = [a for a in animals if a.alive]
         if society.get("settlements"):
@@ -122,27 +148,8 @@ class HistoryTracker:
                 tick=year * 672, year=year, era=society.get("era", "Stone Age"),
                 unique_key="first_settlement",
             )
-
-        by_sp: dict[str, list[dict[str, float]]] = {}
-        if live_h:
-            by_sp["human"] = [h.genome for h in live_h]
-        for a in live_a:
-            by_sp.setdefault(a.species, []).append(a.genome)
-
-        counts = {sp: len(gs) for sp, gs in by_sp.items()}
-        self.population_series.append({"year": year, "counts": counts})
-        self.species_count_series.append({"year": year, "species_count": len(by_sp)})
-        self.gene_diversity_latest = {sp: _genetic_diversity(gs) for sp, gs in by_sp.items()}
-
-        all_g = [g for gs in by_sp.values() for g in gs]
-        h_intel = round(sum(g.get("intelligence", 0.5) for g in by_sp.get("human", ())) / max(1, len(live_h)), 4) if live_h else 0.0
-        all_intel = round(sum(g.get("intelligence", 0.5) for g in all_g) / max(1, len(all_g)), 4) if all_g else 0.0
-        self.avg_intelligence_series.append({"year": year, "human": h_intel, "overall": all_intel})
-
-        avg_cold = round(sum(g.get("cold_tolerance", 0.5) for g in all_g) / max(1, len(all_g)), 4) if all_g else 0.0
-        avg_spd = round(sum(g.get("speed", 0.5) for g in all_g) / max(1, len(all_g)), 4) if all_g else 0.0
-        self.gene_averages_series.append({"year": year, "intelligence": all_intel, "cold_tolerance": avg_cold, "speed": avg_spd})
-
+        if not self.population_series or self.population_series[-1]["year"] != year:
+            self.record_season_metrics(year, "year", live_h, live_a)
         return self.check_stagnation(year, live_h, live_a, active_event)
 
     def check_stagnation(

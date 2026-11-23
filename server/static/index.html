@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Virtual Society</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
+
 <body>
   <header class="topbar">
     <div class="brand">
@@ -29,12 +31,14 @@
         </label>
         <button id="btn-zoom-in" type="button">Zoom +</button>
         <button id="btn-zoom-out" type="button">Zoom -</button>
-        <button id="btn-zoom-reset" type="button">Reset View</button>
+        <button id="btn-zoom-reset" type="button">Fit Map</button>
+        <div id="pop-bar" class="pop-bar"></div>
       </div>
       <div class="canvas-wrap">
-        <canvas id="world-canvas" width="800" height="800"></canvas>
+        <canvas id="world-canvas"></canvas>
+        <canvas id="minimap" width="144" height="144" title="Click to pan"></canvas>
       </div>
-      <div id="pop-bar" class="pop-bar"></div>
+      <div id="legend" class="legend" aria-label="Biome legend"></div>
     </section>
 
     <aside class="sidebar" aria-label="Controls and analytics">
@@ -59,6 +63,8 @@
 
       <nav class="tabs" aria-label="Sidebar views">
         <button type="button" class="tab active" data-tab="people">People</button>
+        <button type="button" class="tab" data-tab="dialogue">Dialogue</button>
+        <button type="button" class="tab" data-tab="tech">Tech</button>
         <button type="button" class="tab" data-tab="charts">Charts</button>
         <button type="button" class="tab" data-tab="tree">Tree</button>
         <button type="button" class="tab" data-tab="timeline">Timeline</button>
@@ -79,13 +85,36 @@
         </section>
       </div>
 
+      <div id="tab-dialogue" class="tab-panel">
+        <section class="card">
+          <h2>Conversation Log</h2>
+          <div class="btn-row" style="margin-bottom:6px">
+            <select id="dlg-filter-person"></select>
+            <select id="dlg-filter-topic"></select>
+            <select id="dlg-filter-place"></select>
+          </div>
+          <div id="dialogue-log" class="inspector">No conversations yet.</div>
+        </section>
+        <section class="card">
+          <h2>Culture Glossaries</h2>
+          <div id="culture-glossaries" class="inspector">No glossaries yet.</div>
+        </section>
+      </div>
+
+      <div id="tab-tech" class="tab-panel">
+        <section class="card">
+          <h2>Tech Tree &amp; Cultures</h2>
+          <div id="tech-tree-box" class="inspector">Loading tech tree...</div>
+        </section>
+      </div>
+
       <div id="tab-charts" class="tab-panel">
         <section class="card">
-          <h2>Population Over Time</h2>
+          <h2>Population Over Time (Seasonal)</h2>
           <div id="chart-pop"></div>
         </section>
         <section class="card">
-          <h2>Gene Averages Over Time</h2>
+          <h2>Gene Averages Over Time (Seasonal)</h2>
           <div id="chart-genes"></div>
         </section>
       </div>
@@ -108,8 +137,15 @@
     </aside>
   </main>
 
+  <script src="/static/terrain.js"></script>
+  <script src="/static/sprites.js"></script>
+  <script src="/static/human_sprites.js"></script>
+  <script src="/static/structures.js"></script>
   <script src="/static/canvas.js"></script>
   <script src="/static/charts.js"></script>
+  <script src="/static/dialogue_ui.js"></script>
+  <script src="/static/tech_ui.js"></script>
   <script src="/static/app.js"></script>
 </body>
+
 </html>

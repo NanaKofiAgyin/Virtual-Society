@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from agents.base import Action, ActionType, Agent, Needs
 from agents.ecosystem import (
-    Carcass, SpeciesConfig, load_species, migration_target,
+    Carcass, SpeciesConfig, allee_effect_factor, load_species, migration_target,
     predator_prey_capture_prob, trophic_energy_gain,
 )
 from agents.genome import Genome, crossover, express_phenotype, mutate, random_genome
@@ -39,6 +39,8 @@ class AnimalAgent(Agent):
     age: int = 0
     breed_timer: int = 0
     vision_radius: int = 5
+    sex: str = "F"
+    last_action: str = "walk"
     death_cause: DeathCause | None = None
     available_actions: list[ActionType] = field(
         default_factory=lambda: [ActionType.MOVE, ActionType.EAT, ActionType.SLEEP, ActionType.GATHER]
@@ -127,6 +129,7 @@ class AnimalAgent(Agent):
                 self.wander(world, rng)
             return
         dist = abs(prey.x - self.x) + abs(prey.y - self.y)
+        chase_range = self.config.home_range if self.config else 10
         if dist <= max(1, self.speed):
             self.position = prey.position
             prob = predator_prey_capture_prob(self, prey) * stage_strength_multiplier(self.stage)
@@ -136,7 +139,7 @@ class AnimalAgent(Agent):
                 self.needs.adjust(hunger=trophic_energy_gain(energy_val))
             else:
                 prey.flee_from(world, self.position, rng)
-        elif dist <= 10 and self.goto(world, prey.position):
+        elif dist <= chase_range and self.goto(world, prey.position):
             return
         else:
             self.wander(world, rng)
@@ -155,26 +158,34 @@ class AnimalAgent(Agent):
         self.needs.adjust(hunger=-self.config.hunger_rate * (0.7 + 0.3 * pheno.food_need))
 
         if self.age >= self.effective_max_age:
-            self.alive, self.death_cause = False, DeathCause.OLD_AGE
+            self.alive, self.death_cause, self.last_action = False, DeathCause.OLD_AGE, "die"
             return None
         if self.needs.hunger <= 0.0:
-            self.alive, self.starving, self.death_cause = False, True, DeathCause.STARVATION
+            self.alive, self.starving, self.death_cause, self.last_action = False, True, DeathCause.STARVATION, "die"
             return None
         hazard = apply_environmental_hazards(self, world.environment, self.genome, rng)
         if hazard is not None:
-            self.death_cause = hazard
+            self.death_cause, self.last_action = hazard, "die"
             return None
 
+        move_anim = "fly" if self.effective_body_type is BodyType.FLYING else ("swim" if self.effective_body_type is BodyType.AQUATIC else "walk")
         threat = self._find_threat(agents)
         if threat is not None and self.speed > 0:
+            self.last_action = move_anim
             self.flee_from(world, threat.position, rng)
         elif self.config.diet in ("scavenger", "decomposer") and self.needs.hunger < 7.0:
+            self.last_action = "eat"
             self._scavenge(world, carcasses or [], rng)
         elif self.config.diet in ("carnivore", "omnivore") and self.needs.hunger < 6.5:
+            self.last_action = "eat"
             self._hunt(world, agents, rng)
         elif self.needs.hunger < 7.0:
+            self.last_action = "eat"
             self._forage(world, rng)
+        elif world.environment.hour < 5 and self.speed > 0:
+            self.last_action = "sleep"
         elif self.speed > 0:
+            self.last_action = move_anim
             mig = migration_target(self, world)
             if mig is not None:
                 self.position = mig
@@ -183,7 +194,9 @@ class AnimalAgent(Agent):
 
         if can_reproduce and self.alive and self.stage is LifeStage.ADULT and self.breed_timer <= 0:
             mates = [o for o in agents if isinstance(o, AnimalAgent) and can_mate_animals(self, o)]
-            if mates and rng.random() < self.config.breed_chance:
+            local_pack = sum(1 for o in agents if isinstance(o, AnimalAgent) and o.alive and o.species == self.species) + 1
+            allee = allee_effect_factor(local_pack, self.config.social, threshold=4)
+            if mates and rng.random() < self.config.breed_chance * allee:
                 mate = rng.choice(mates)
                 cd = int(self.config.breed_cooldown * pheno.breed_cooldown_factor)
                 self.breed_timer, mate.breed_timer = cd, cd
@@ -196,24 +209,35 @@ class AnimalAgent(Agent):
                     position=self.position, needs=Needs(hunger=6.5, energy=8.0, social=8.0),
                     species=self.species, config=self.config, genome=child_genome,
                     lineage_id=self.lineage_id, parent_id=self.id, age=0, breed_timer=cd,
+                    sex=rng.choice(("M", "F")),
                 )
         return None
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize animal with species, 4 visual life stages, sex, action, and genes."""
+        g, frac = self.genome, self.age / max(1, self.effective_max_age)
+        vstage = "baby" if frac < 0.08 else ("juvenile" if frac < 0.20 else ("adult" if frac < 0.75 else "elder"))
+        return {
+            **super().to_dict(), "species": self.species, "stage": vstage, "sex": self.sex,
+            "last_action": self.last_action,
+            "genome": {k: round(g.get(k, 0.5), 2) for k in ("size", "speed", "cold_tolerance", "camouflage", "heat_tolerance")},
+        }
 
-def spawn_animals(
-    world: WorldMap, species_map: dict[str, SpeciesConfig], rng: random.Random,
-) -> list[AnimalAgent]:
-    """Spawn founding populations for motile species in their matching body-type habitats."""
+
+def spawn_animals(world: WorldMap, species_map: dict[str, SpeciesConfig], rng: random.Random, scale: float = 1.0) -> list[AnimalAgent]:
+    """Spawn founding populations for individual-tier species in their matching habitats."""
     pools = {bt: world.positions_for_body(bt) for bt in BodyType}
     animals: list[AnimalAgent] = []
     counter = 0
     for name, cfg in species_map.items():
-        if cfg.founding_max <= 0:
+        if cfg.is_density_tier or cfg.founding_max <= 0:
             continue
         pool = pools.get(BodyType(cfg.body_type)) or pools[BodyType.FLYING]
         if not pool:
             continue
-        for _ in range(rng.randint(cfg.founding_min, cfg.founding_max)):
+        lo = max(1, int(round(cfg.founding_min * scale)))
+        hi = max(lo, int(round(cfg.founding_max * scale)))
+        for _ in range(rng.randint(lo, hi)):
             counter += 1
             pos, aid = rng.choice(pool), f"{name}_{counter}"
             animals.append(AnimalAgent(
@@ -221,6 +245,6 @@ def spawn_animals(
                 needs=Needs(hunger=rng.uniform(6.5, 9.5), energy=8.0, social=8.0),
                 species=name, config=cfg, genome=random_genome(cfg.genome_template, rng=rng),
                 lineage_id=aid, age=rng.randrange(int(cfg.max_age * 0.22), int(cfg.max_age * 0.55)),
-                breed_timer=rng.randrange(0, max(1, cfg.breed_cooldown // 2)),
+                breed_timer=rng.randrange(0, max(1, cfg.breed_cooldown // 2)), sex=rng.choice(("M", "F")),
             ))
     return animals

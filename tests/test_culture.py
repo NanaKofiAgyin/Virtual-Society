@@ -46,7 +46,7 @@ def test_tech_discovery_teaching_and_knowledge_loss_on_death() -> None:
     )
 
     discovered = None
-    for _ in range(40):
+    for _ in range(600):
         discovered = attempt_discovery(ada, [bram], group_size=15, techs=techs, rng=rng)
         if discovered is not None:
             break

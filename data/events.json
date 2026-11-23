@@ -1,56 +1,47 @@
 {
   "drought": {
-    "chance": 0.006,
+    "chance": 0.0012,
     "duration": 72,
-    "temp_delta": 0.15,
+    "temp_delta": 0.12,
     "moisture_delta": -0.35,
     "regrow_multiplier": 0.35,
     "disease_multiplier": 1.2,
-    "description": "A severe drought dries the land and slows plant growth."
+    "description": "A rare regional drought dries the land and slows plant growth."
   },
   "flood": {
-    "chance": 0.005,
+    "chance": 0.0010,
     "duration": 48,
-    "temp_delta": -0.05,
+    "temp_delta": -0.04,
     "moisture_delta": 0.40,
     "regrow_multiplier": 0.70,
-    "disease_multiplier": 1.6,
-    "description": "Heavy floods swell rivers and soak the lowlands."
+    "disease_multiplier": 1.5,
+    "description": "Seasonal floods swell rivers and soak the floodplains."
   },
   "fire": {
-    "chance": 0.004,
+    "chance": 0.0008,
     "duration": 24,
-    "temp_delta": 0.20,
+    "temp_delta": 0.18,
     "moisture_delta": -0.25,
     "regrow_multiplier": 0.25,
     "disease_multiplier": 1.0,
-    "description": "Wildfires sweep dry brush and scorch forests."
-  },
-  "ice_age": {
-    "chance": 0.0015,
-    "duration": 168,
-    "temp_delta": -0.35,
-    "moisture_delta": -0.10,
-    "regrow_multiplier": 0.20,
-    "disease_multiplier": 1.3,
-    "description": "A sudden cold snap plunges the world into a mini ice age."
+    "description": "Wildfires sweep dry brush and clear old-growth forests."
   },
   "volcano": {
-    "chance": 0.0015,
-    "duration": 48,
+    "chance": 0.00005,
+    "duration": 72,
     "temp_delta": -0.18,
     "moisture_delta": -0.10,
     "regrow_multiplier": 0.30,
-    "disease_multiplier": 1.5,
-    "description": "Volcanic ash darkens the skies and cools the climate."
+    "disease_multiplier": 1.4,
+    "description": "A rare volcanic eruption casts ash across the skies."
   },
   "disease_outbreak": {
-    "chance": 0.003,
+    "chance": 0.0006,
     "duration": 96,
     "temp_delta": 0.0,
     "moisture_delta": 0.0,
     "regrow_multiplier": 1.0,
     "disease_multiplier": 4.0,
-    "description": "A contagious blight spreads through the population."
+    "description": "A contagious blight spreads through dense populations."
   }
 }

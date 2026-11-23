@@ -1,22 +1,34 @@
-/** Virtual Society Viewer controller: zoom/pan, layers, charts, tree of life, timeline. */
+/** Virtual Society Viewer controller: zoom/pan, minimap, legend, layers, charts, timeline. */
 (() => {
   const $ = (id) => document.getElementById(id);
   const canvas = $("world-canvas");
-  const renderer = window.WorldCanvas.create(canvas);
+  const minimap = $("minimap");
+  const renderer = window.WorldCanvas.create(canvas, minimap);
   const el = {
     brain: $("brain-badge"), era: $("era-badge"), clock: $("clock-status"), pop: $("pop-bar"),
     layer: $("layer-select"), zoomIn: $("btn-zoom-in"), zoomOut: $("btn-zoom-out"), zoomReset: $("btn-zoom-reset"),
+    legend: $("legend"),
     play: $("btn-play"), step: $("btn-step"), ff: $("btn-ff"), speed: $("speed-slider"), speedVal: $("speed-val"),
     save: $("btn-save"), load: $("btn-load"), reset: $("btn-reset"), toast: $("toast"),
     people: $("people-list"), inspector: $("inspector"), events: $("event-feed"),
     chartPop: $("chart-pop"), chartGenes: $("chart-genes"),
     phylo: $("phylo-tree"), phyloDetail: $("phylo-detail"),
     stagnation: $("stagnation-box"), timeline: $("timeline-box"),
+    dlgLog: $("dialogue-log"), glossaries: $("culture-glossaries"), techTreeBox: $("tech-tree-box"),
+    dlgPerson: $("dlg-filter-person"), dlgTopic: $("dlg-filter-topic"), dlgPlace: $("dlg-filter-place"),
   };
+
+  const LEGEND_ITEMS = [
+    ["Deep Ocean", "#134074"], ["Shallow Sea", "#2ec4b6"], ["River", "#3a86ff"],
+    ["Beach", "#f4e2b8"], ["Desert", "#e2c07d"], ["Savanna", "#c5d86d"],
+    ["Grassland", "#76c85b"], ["Forest", "#2d6a4f"], ["Jungle", "#15803d"],
+    ["Taiga", "#3b7a6b"], ["Tundra", "#9db4ab"], ["Mountain", "#8d99ae"],
+    ["Snow", "#f8fafc"], ["Settlement", "#facc15"],
+  ];
 
   let mapData = null, layersData = null, stateData = null, historyData = null;
   let selectedId = null, hoveredId = null, selectedSpecies = null;
-  let tickCounter = 0, rafId = null, dragging = false, lastDrag = null;
+  let tickCounter = 0, rafId = null, dragging = false, movedDrag = false, lastDrag = null;
 
   function esc(v) {
     return String(v ?? "").replace(/[&<>"']/g, (c) => ({
@@ -39,9 +51,15 @@
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
 
-  async function fetchMapAndLayers() {
+  function renderLegend() {
+    el.legend.innerHTML = LEGEND_ITEMS.map(([name, color]) =>
+      `<span class="legend-item"><span class="swatch" style="background:${esc(color)}"></span>${esc(name)}</span>`
+    ).join("");
+  }
+
+  async function fetchMapAndLayers(resetCam = false) {
     [mapData, layersData] = await Promise.all([api("/api/map"), api("/api/layers")]);
-    renderer.setMap(mapData, layersData);
+    renderer.setMap(mapData, layersData, resetCam);
   }
 
   function redraw() {
@@ -63,7 +81,7 @@
     el.speed.value = String(stateData.speed);
     el.speedVal.textContent = Number(stateData.speed).toFixed(1);
     el.pop.innerHTML = Object.entries(stateData.counts)
-      .filter(([, v]) => v > 0).slice(0, 10)
+      .filter(([, v]) => v > 0).slice(0, 8)
       .map(([k, v]) => `<span><strong>${esc(k)}</strong>: ${esc(v)}</span>`).join("");
   }
 
@@ -91,19 +109,28 @@
         + `<div class="bar-bg"><div class="bar-fill${val < 3.5 ? " low" : ""}" style="width:${pct}%"></div></div>`
         + `<span>${Number(val).toFixed(1)}</span></div>`;
     }).join("");
-
     const techs = (h.culture?.known_techs || []).map(esc).join(", ") || "None";
     const mems = (h.memories || []).slice(-4).reverse()
       .map((m) => `<li>[t${esc(m.tick)}] ${esc(m.text)}</li>`).join("") || "<li>None</li>";
     const famHtml = window.WorldCharts.renderFamilyTreeHtml(h, stateData.humans);
+    const mindHtml = window.WorldDialogueUI ? window.WorldDialogueUI.renderPersonMindHtml(stateData.minds?.[h.id]) : "";
 
     el.inspector.innerHTML =
       `<div class="kv"><strong>${esc(h.name)}</strong> · ${esc(h.persona?.job)} (${esc(h.stage)}, ${esc(h.age_years)}y)</div>`
-      + bars + famHtml
+      + bars + famHtml + mindHtml
       + `<div class="kv"><strong>Techs:</strong> ${techs}</div>`
       + `<div class="kv"><strong>Plan:</strong> ${esc(h.daily_plan || "None yet")}</div>`
       + `<div class="kv"><strong>Thought:</strong> ${esc(h.last_reflection || h.last_speech || h.last_action)}</div>`
       + `<div class="kv"><strong>Memories:</strong><ul class="event-feed">${mems}</ul></div>`;
+  }
+
+  function renderDialogue() {
+    if (!stateData || !window.WorldDialogueUI) return;
+    window.WorldDialogueUI.renderConversationLog(
+      el.dlgLog, { person: el.dlgPerson, topic: el.dlgTopic, place: el.dlgPlace }, stateData.conversations,
+    );
+    window.WorldDialogueUI.renderGlossaries(el.glossaries, stateData.glossaries);
+    if (window.WorldTechUI) window.WorldTechUI.renderTechTree(el.techTreeBox, stateData.tech_tree);
   }
 
   function renderAnalytics() {
@@ -126,10 +153,11 @@
       stateData = st;
       if (hist) historyData = hist;
       if (!selectedId && st.humans.length) selectedId = st.humans[0].id;
-      if (++tickCounter % 12 === 0 || !mapData) await fetchMapAndLayers();
+      if (++tickCounter % 12 === 0 || !mapData) await fetchMapAndLayers(false);
       renderHeader();
       renderPeople();
       renderInspector();
+      renderDialogue();
       el.events.innerHTML = (ev.events || []).slice(-25).reverse()
         .map((e) => `<li>[t${esc(e.tick)}] ${esc(e.message)}</li>`).join("");
       if (fetchHist) renderAnalytics();
@@ -153,22 +181,26 @@
     if (b) { selectedId = b.dataset.jumpId; renderPeople(); renderInspector(); redraw(); }
   });
   el.layer.addEventListener("change", () => { renderer.setLayer(el.layer.value); redraw(); });
+  [el.dlgPerson, el.dlgTopic, el.dlgPlace].forEach((s) => s?.addEventListener("change", renderDialogue));
   el.zoomIn.addEventListener("click", () => { renderer.setZoom(renderer.getZoom() * 1.4); redraw(); });
   el.zoomOut.addEventListener("click", () => { renderer.setZoom(renderer.getZoom() / 1.4); redraw(); });
   el.zoomReset.addEventListener("click", () => { renderer.resetView(); redraw(); });
+  minimap.addEventListener("click", (e) => { renderer.minimapClick(e.clientX, e.clientY); redraw(); });
+  window.addEventListener("resize", () => { renderer.resize(); redraw(); });
+
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault();
     const r = canvas.getBoundingClientRect();
-    const cx = (e.clientX - r.left) * (canvas.width / r.width);
-    const cy = (e.clientY - r.top) * (canvas.height / r.height);
-    renderer.setZoom(renderer.getZoom() * (e.deltaY < 0 ? 1.25 : 0.8), cx, cy);
+    renderer.setZoom(renderer.getZoom() * (e.deltaY < 0 ? 1.25 : 0.8), e.clientX - r.left, e.clientY - r.top);
     redraw();
   }, { passive: false });
-  canvas.addEventListener("mousedown", (e) => { dragging = true; lastDrag = [e.clientX, e.clientY]; });
+  canvas.addEventListener("mousedown", (e) => { dragging = true; movedDrag = false; lastDrag = [e.clientX, e.clientY]; });
   window.addEventListener("mouseup", () => { dragging = false; });
   canvas.addEventListener("mousemove", (e) => {
     if (dragging && lastDrag) {
-      renderer.panBy(e.clientX - lastDrag[0], e.clientY - lastDrag[1]);
+      const dx = e.clientX - lastDrag[0], dy = e.clientY - lastDrag[1];
+      if (Math.hypot(dx, dy) > 2) movedDrag = true;
+      renderer.panBy(dx, dy);
       lastDrag = [e.clientX, e.clientY];
       redraw();
       return;
@@ -178,6 +210,7 @@
   });
   canvas.addEventListener("mouseleave", () => { if (hoveredId) { hoveredId = null; redraw(); } });
   canvas.addEventListener("click", (e) => {
+    if (movedDrag) return;
     const hit = renderer.hitTest(e.clientX, e.clientY);
     if (hit) { selectedId = hit; renderPeople(); renderInspector(); redraw(); }
   });
@@ -188,17 +221,18 @@
   el.speed.addEventListener("change", () => postJson("/api/control", { speed: Number(el.speed.value) }));
   el.save.addEventListener("click", async () => { const r = await api("/api/save", { method: "POST" }); showToast(`Saved tick ${r.tick}`); });
   el.load.addEventListener("click", async () => {
-    try { const r = await api("/api/load", { method: "POST" }); await fetchMapAndLayers(); showToast(`Loaded tick ${r.tick}`); poll(); }
+    try { const r = await api("/api/load", { method: "POST" }); await fetchMapAndLayers(false); showToast(`Loaded tick ${r.tick}`); poll(); }
     catch { showToast("No saved snapshot"); }
   });
   el.reset.addEventListener("click", async () => {
     const seed = Math.floor(Math.random() * 100000);
     await postJson("/api/reset", { seed });
-    await fetchMapAndLayers();
+    await fetchMapAndLayers(true);
     showToast(`New world (seed ${seed})`);
     poll();
   });
 
-  fetchMapAndLayers().then(poll);
+  renderLegend();
+  fetchMapAndLayers(true).then(poll);
   setInterval(poll, 500);
 })();

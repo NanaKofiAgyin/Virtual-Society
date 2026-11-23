@@ -178,6 +178,12 @@ def spawn_human_child(
     from agents.human import HumanAgent, Persona
 
     child_genome = mutate(crossover(parent_a.genome, parent_b.genome, rng=rng), rate=0.15, rng=rng)
+    # Skin tone adapts gradually toward local latitude UV/sunlight over many generations
+    pos = parent_a.home or parent_a.position
+    sunlight = max(0.05, min(0.95, 1.0 - abs(pos[1] - world.height / 2.0) / max(1.0, world.height / 2.0)))
+    cur_skin = child_genome.get("skin_tone", 0.5)
+    child_genome["skin_tone"] = round(max(0.05, min(0.95, cur_skin + (sunlight - cur_skin) * 0.08 + rng.gauss(0.0, 0.02))), 3)
+    child_genome.setdefault("hair_tone", round(rng.uniform(0.1, 0.9), 3))
     child_culture = inherit_culture(parent_a, parent_b, rng=rng)
     surname = parent_a.family.surname or parent_b.family.surname or "Village"
     given = rng.choice(CHILD_GIVEN_NAMES)
@@ -206,6 +212,7 @@ def spawn_human_child(
         ),
         skills=inherited_skills,
         age_ticks=0,
+        sex=rng.choice(("M", "F")),
     )
     parent_a.family.children.append(child.id)
     parent_b.family.children.append(child.id)

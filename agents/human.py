@@ -68,6 +68,7 @@ class HumanAgent(Agent):
     skills: dict[str, float] = field(default_factory=dict)
     age_ticks: int = 20 * TICKS_PER_YEAR
     breed_timer: int = 0
+    sex: str = "F"
     death_cause: DeathCause | None = None
     last_action: str = "idle"
     last_speech: str = ""
@@ -230,8 +231,8 @@ class HumanAgent(Agent):
         return {
             **self.to_dict(),
             "persona": self.persona.to_dict() if self.persona else {},
-            "stage": self.stage.value,
-            "age_years": self.age_years,
+            "stage": self.stage.value, "sex": self.sex, "age_years": self.age_years,
+            "genome": {k: round(v, 3) for k, v in self.genome.items()},
             "home": list(self.home) if self.home else list(self.position),
             "family": self.family.to_dict(),
             "culture": self.culture.to_dict(),
